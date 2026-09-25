@@ -1,6 +1,6 @@
 # SKIlark
 
-![](./img/hero.jpg)
+![](./img/hero.jpeg)
 
 Joy on SKIjack. A concatenative language in the line of Joy (von Thun) and
 Kerby's *Theory of Concatenative Combinators*, written as one
