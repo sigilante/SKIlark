@@ -1,0 +1,49 @@
+-- SKIlark: Joy's kernel on Scott data, interpreted by a fold (PLAN.md).
+-- This file is the kernel alone; skilark.joy appends generated programs.  The words are Joy's (von Thun) and the basis follows
+-- Kerby; `Do` is Joy's `i`, since `I` is reserved for the combinator, and
+-- `Ifz` is the one data-inspecting word, the Scott eliminator of nat.
+-- `Qcons` is Joy's `cons`: `Cons` names the path constructor by SKIjack's
+-- rule (SPEC section 8) and constructor names are global.
+-- Quotations are data: `Quot` holds a program, not a function, so every
+-- field is first-order and `Do` is a splice.  Derived words are equations
+-- whose values are programs: the program's own names are its dictionary.
+nat    === Zero | Suc nat
+item   === Num nat | Quot prog
+stack  === Empty | Push item stack
+word   === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Ifz | Lit nat | Quote prog | Add
+prog   === Done | Then word prog
+result === RVal stack | RErr | RTime
+
+add m n = n |> { Zero m; Suc k (Suc (add m k)) }
+mul m n = n |> { Zero Zero; Suc k (add m (mul m k)) }
+cat p q = p |> { Done q; Then w r (Then w (cat r q)) }
+-- the word that pushes an item back: cons, unit and dip re-quote a datum
+wordOf a = a |> { Num n (Lit n); Quot r (Quote r) }
+
+-- One unit of fuel per word.  step takes the loop as a parameter: the
+-- expander ties one fixpoint per equation and refuses mutual recursion.
+exec f p s = f |> { Zero RTime; Suc g (p |> { Done (RVal s); Then w q (step (exec g) w q s) }) }
+step ex w q s = w |> {
+  Dup     (s |> { Empty RErr; Push a t (ex q (Push a (Push a t))) });
+  Swap    (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push b (Push a u))) }) });
+  Pop     (s |> { Empty RErr; Push a t (ex q t) });
+  Qcons   (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex q (Push (Quot (Then (wordOf b) r)) u)) }) }) });
+  Cat     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (b |> { Num m RErr; Quot l (ex q (Push (Quot (cat l r)) u)) }) }) }) });
+  Unit    (s |> { Empty RErr; Push a t (ex q (Push (Quot (Then (wordOf a) Done)) t)) });
+  Dip     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex (cat r (Then (wordOf b) q)) u) }) }) });
+  Do      (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex (cat r q) t) }) });
+  Ifz     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot sc (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot z (u |> { Empty RErr; Push c v (c |> { Num n (n |> { Zero (ex (cat z q) v); Suc m (ex (cat sc q) (Push (Num m) v)) }); Quot r RErr }) }) }) }) }) });
+  Lit n   (ex q (Push (Num n) s));
+  Quote r (ex q (Push (Quot r) s));
+  Add     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (Num (add m n)) u)); Quot r RErr }); Quot r RErr }) }) }) }
+
+-- The same loop without fuel, for level 1: there the interpreter's
+-- fuel bounds the run, so the object program needs none of its own.
+execU p s = p |> { Done (RVal s); Then w q (step execU w q s) }
+
+one   := Suc Zero
+two   := Suc one
+three := Suc two
+five  := add two three
+ten   := add five five
+fuel  := mul ten (add ten ten)

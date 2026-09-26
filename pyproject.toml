@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skilark"
-version = "0.1.0"
+version = "0.2.0"
 description = "Joy on SKIjack: a concatenative language whose words are closed SKI supercombinators"
 readme = "README.md"
 requires-python = ">=3.10"

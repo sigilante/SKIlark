@@ -2,13 +2,15 @@
 ⍝ (PLAN.md).  The words are Joy's (von Thun) and the basis follows
 ⍝ Kerby; `Do` is Joy's `i`, since `I` is reserved for the combinator, and
 ⍝ `Ifz` is the one data-inspecting word, the Scott eliminator of nat.
+⍝ `Qcons` is Joy's `cons`: `Cons` names the path constructor by SKIjack's
+⍝ rule (SPEC section 8) and constructor names are global.
 ⍝ Quotations are data: `Quot` holds a program, not a function, so every
 ⍝ field is first-order and `Do` is a splice.  Derived words are equations
 ⍝ whose values are programs: the program's own names are its dictionary.
 nat    ≡ Zero | Suc nat
 item   ≡ Num nat | Quot prog
 stack  ≡ Empty | Push item stack
-word   ≡ Dup | Swap | Pop | Cons | Cat | Unit | Dip | Do | Ifz | Lit nat | Quote prog | Add
+word   ≡ Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Ifz | Lit nat | Quote prog | Add
 prog   ≡ Done | Then word prog
 result ≡ RVal stack | RErr | RTime
 
@@ -25,7 +27,7 @@ step ex w q s = w ▹ {
   Dup     (s ▹ { Empty RErr; Push a t (ex q (Push a (Push a t))) });
   Swap    (s ▹ { Empty RErr; Push a t (t ▹ { Empty RErr; Push b u (ex q (Push b (Push a u))) }) });
   Pop     (s ▹ { Empty RErr; Push a t (ex q t) });
-  Cons    (s ▹ { Empty RErr; Push a t (a ▹ { Num n RErr; Quot r (t ▹ { Empty RErr; Push b u (ex q (Push (Quot (Then (wordOf b) r)) u)) }) }) });
+  Qcons   (s ▹ { Empty RErr; Push a t (a ▹ { Num n RErr; Quot r (t ▹ { Empty RErr; Push b u (ex q (Push (Quot (Then (wordOf b) r)) u)) }) }) });
   Cat     (s ▹ { Empty RErr; Push a t (a ▹ { Num n RErr; Quot r (t ▹ { Empty RErr; Push b u (b ▹ { Num m RErr; Quot l (ex q (Push (Quot (cat l r)) u)) }) }) }) });
   Unit    (s ▹ { Empty RErr; Push a t (ex q (Push (Quot (Then (wordOf a) Done)) t)) });
   Dip     (s ▹ { Empty RErr; Push a t (a ▹ { Num n RErr; Quot r (t ▹ { Empty RErr; Push b u (ex (cat r (Then (wordOf b) q)) u) }) }) });
@@ -34,6 +36,10 @@ step ex w q s = w ▹ {
   Lit n   (ex q (Push (Num n) s));
   Quote r (ex q (Push (Quot r) s));
   Add     (s ▹ { Empty RErr; Push a t (t ▹ { Empty RErr; Push b u (a ▹ { Num m (b ▹ { Num n (ex q (Push (Num (add m n)) u)); Quot r RErr }); Quot r RErr }) }) }) }
+
+⍝ The same loop without fuel, for level 1: there the interpreter's
+⍝ fuel bounds the run, so the object program needs none of its own.
+execU p s = p ▹ { Done (RVal s); Then w q (step execU w q s) }
 
 one   ≔ Suc Zero
 two   ≔ Suc one
@@ -50,7 +56,7 @@ rot   ≔ Then (Quote (Then Swap Done)) (Then Dip (Then Swap Done))
 sip   ≔ Then (Quote (Then Dup Done)) (Then Dip (Then Dip Done))
 kComb ≔ Then (Quote (Then Pop Done)) (Then Dip (Then Do Done))
 ⍝ Kerby's y: [P] y leaves [self] on top and runs P
-yComb ≔ Then (Quote (Then Dup (Then Cons Done))) (Then Swap (Then Cat (Then Dup (Then Cons (Then Do Done)))))
+yComb ≔ Then (Quote (Then Dup (Then Qcons Done))) (Then Swap (Then Cat (Then Dup (Then Qcons (Then Do Done)))))
 
 ⍝ sumto: n -> 0 + 1 + ... + n, by y.  With n [self] on the stack:
 ⍝   swap [pop 0] [dup [swap i] dip 1 + +] ifz
@@ -63,7 +69,7 @@ p1 ≔ Then (Lit one) (Then (Lit two) (Then Add (Then Dup (Then Add Done))))    
 p2 ≔ Then (Lit three) (Then (Quote (Then Dup (Then Add Done))) (Then Do Done))       ⍝ 3 [dup +] i      => 6
 p3 ≔ Then (Lit one) (Then (Lit two) over)                                            ⍝ 1 2 over         => 1 2 1
 p4 ≔ Then (Lit one) (Then (Quote (Then (Lit two) Done)) (Then (Quote (Then (Lit three) Done)) kComb))  ⍝ 1 [2] [3] k => 1 3
-p5 ≔ Then (Lit one) (Then (Lit two) (Then Unit (Then Cons Done)))                    ⍝ 1 2 unit cons    => [1 2]
+p5 ≔ Then (Lit one) (Then (Lit two) (Then Unit (Then Qcons Done)))                    ⍝ 1 2 unit cons    => [1 2]
 p6 ≔ Then Add Done                                                                   ⍝ +                => RErr
 p7 ≔ Then (Lit three) sumto                                                          ⍝ 3 sumto          => 6
 p8 ≔ Then (Lit five) sumto                                                           ⍝ 5 sumto          => 15
