@@ -313,6 +313,44 @@ splice (`cat`) `Do` against a CPS `exec` that sequences results instead of
 copying continuations. Exit: a table here and in SKIjack's
 `RUNTIME-DESIGN.md` §8, and a decision on `Do`.
 
+*Census, first result (2026-09-28).* Avon's dynamic census
+(`avon/docs/DESIGN.md` §6.7) replaces `jets.py` here: it counts the terms
+a run calls, not the terms a program contains, and weighs each by the
+contractions a jet on it would absorb. `python3 -m skilark.export` writes
+the 41 runs; `avon census` reproduces every pinned count. Per form, the
+three leading rows (each alone; rows overlap and do not add):
+
+| form | runs | contractions | leading rows, % absorbed |
+|---|---:|---:|---|
+| phase 1 | 9 | 344,888 | `λabcdef. f (a b d)` 17.1; a wrapper of `step` 12.7; `λabcde. e (a b c)` 11.8 |
+| interpreted | 16 | 432,962 | `step` 16.9; `λabcdef. f (a b d)` 13.6; `B (B S)` 12.1 |
+| compiled | 16 | 150,548 | `λabcdef. f (a b d)` 15.5; `B (B S)` 11.5; `B (B K)` 11.1 |
+
+The compiled form runs the same eight programs in 35% of the interpreted
+form's contractions. `step` accounts for a quarter of the gap: 386 calls
+at 189 contractions each, 72,954 of 282,414.
+
+*Against the J1 and the F18A.* The hardware makes the stack words
+primitive: `dup`, `drop`, `swap`, `over` are fields of one J1 instruction,
+and `+`, `and`, `2*` are single F18A opcodes. In SKI the words cost almost
+nothing. `Dup`, `Swap`, `Add`, `Do` and `Pop` are nullary constructors of
+`word`, selectors 12 to 31 atoms long, called 75, 64, 60, 53 and 11 times
+in 928,398 contractions; none ranks. What ranks is what the hardware
+builds into its datapath instead of its opcode list:
+
+- *the stack cell:* `Cons`/`Push`, 2,105 fires at 19 contractions;
+- *instruction dispatch:* `step`, 189 contractions a word;
+- *the counter:* `Suc`, 10,153 fires, numerals and the fuel among them
+  -- the J1's `T-1` and the F18A's `next`/`unext` in hardware;
+- *argument plumbing:* `B (B K)`, `B (B S)`, `T`, the combinators that
+  bracket abstraction leaves under binders -- what a register file or a
+  stack's fixed depth makes free.
+
+So the oracle's answer is negative for the word list and positive for
+the machine: jet the representation (constructors, dispatch, counters),
+not the words. `Do`'s splice and the CPS alternative are not yet
+measured, so the decision on `Do` is still open.
+
 **Phase 4: write-up, if the numbers justify it.** The correspondence
 table, the two modes, the two-level dictionary, the census, and the laws
 as jet obligations. Stack-effect typing (depth, not just shape: Diggins's
