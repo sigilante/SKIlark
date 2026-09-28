@@ -268,12 +268,33 @@ and the compiled mode is what the jet census runs over.
 
 **I/O is events, not `key emit`.** A SKIlark machine is a state (a stack and
 a dictionary) poked with events and emitting effects, the shape of
-SKIjack's `kernel-events.ski`: `poke : state -> event -> [state' effects]`.
+SKIjack's `kernel-events.ski`, a door `[battery state]` (SKIjack `SPEC.md`
+§4.1): `poke : kernel -> event -> [effects kernel']`, pulled by axis.
 There are no memory-mapped words.
 
 **The algebra is the test suite.** Joy's laws hold of compiled terms and
 are checked behaviourally (§1). Each law is later a proof obligation on the
 jet that replaces the word on its left.
+
+**The runtime: supercombinators and data jets.** SKIlark is a client for
+two runtime features, both built in SKIjack's `avon/` and not here. Every
+SKIlark word is a closed term, so Avon can compile each word as a
+supercombinator, and the phase 3 census ranks which ones to jet
+(`RUNTIME-DESIGN.md` §8). Those are code jets, keyed by the structure of a
+term that runs. A data jet is keyed instead by the shape of a value that is
+only ever inspected. The first target is `nat === Zero | Suc nat`: the
+numeral n is n nested `Suc` cells, and `add m n` recurses once per `Suc`
+of `n`. A data jet would hold the numeral as a machine integer and run
+`add`, `mul` and `wIfz`'s test natively. It would build the Scott term
+only when a program inspects the numeral in a way the jet does not cover.
+The obligation is a correspondence: the integer and the Scott term must
+agree under every eliminator the jet claims, just as Joy's laws are
+obligations on code jets. Values must also stay shared. An `S`
+contraction duplicates its argument by reference, so printing a reduced
+term can take space exponential in the reduction. The lean-ski zkVM
+benchmark printed its results in full, and that is the likely cause of a
+kernel panic on 2026-09-26. A data jet reads and writes the shared form,
+never the printed one.
 
 ## 3. Phases
 
