@@ -18,6 +18,11 @@ namespace.
   quotations defunctionalized, no interpreter present), and *level 1*
   (either form under SKIjack's blocking interpreter `wfN`, with
   definitions in a namespace read by scry).
+- `skilark/zk.py` — statements in zero knowledge: a Joy predicate as the
+  verifier of an atom of lean-ski's composed circuit. `split` adds two
+  hidden bit strings and compares the sum with `x`; `python -m skilark.zk
+  8` writes its SKIjack source, which lean-ski compiles and proves. It is
+  the pipeline, not yet a range proof (`PLAN.md` §3 says why).
 - `PLAN.md` — what is built, what was measured, and what comes next.
 
 ```
