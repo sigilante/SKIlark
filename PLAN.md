@@ -387,8 +387,11 @@ step's tree distinct (256k host contractions against 201k). At `k = m = 8`
 it costs 200,884 host contractions, and in lean-ski's circuit 471,888
 rows (`release/skilark/csplit8` there). At these sizes the commitment
 neither binds nor hides: the `2^16` openings map to 430 sums, none above
-437, and `c = 255` alone opens to 157 values of `a`. Real parameters need
-jets under the hiding.
+437, and `c = 255` alone opens to 157 values of `a`. The commitment step
+closes at this toy scope: a full adder written natively in SKIjack costs
+450 to 640 host contractions a bit, lean-ski's largest circuit affords
+about 800 of them, and sound parameters need tens of thousands. A real
+commitment needs its hash computed outside the reduction, a data jet.
 
 **Phase 4: write-up, if the numbers justify it.** The correspondence
 table, the two modes, the two-level dictionary, the census, and the laws
