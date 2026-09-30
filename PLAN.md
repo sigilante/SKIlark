@@ -1,6 +1,6 @@
 # SKIlark: Joy on SKIjack
 
-> **Status (2026-09-29).** Phases 1 and 2 built; statements in zero
+> **Status (2026-09-29).** Phases 1 and 2 built; predicates in zero
 > knowledge (§3) built. `skilark/programs/`
 > holds the kernel and the phase-1 programs; `skilark/joy.py` is the front
 > end in three forms; `tests/` pins every number in §1 (the level-1 runs
@@ -352,34 +352,32 @@ the machine: jet the representation (constructors, dispatch, counters),
 not the words. `Do`'s splice and the CPS alternative are not yet
 measured, so the decision on `Do` is still open.
 
-**Statements in zero knowledge (`skilark/zk.py`, 2026-09-29).** A
-SKIlark predicate is the verifier of an atom of lean-ski's composed
-zero-knowledge circuit. `V x w` runs the program on the stack `x` above
-`w` and accepts, returning `K` itself, when the program leaves a nonzero
-numeral on top; the wrapper is SKIjack source (`vsplit`), and lean-ski's
-Lean front end compiles the whole source to the term `skijack` gives, so
-its verifier checks a statement against the source. The first statement,
-`split`, adds two hidden bit strings, `a` and `b` below `2^k`, and
-compares the sum with `x`. `x` is one quotation of its bits, least
-significant outermost; `w` is the interleaved bits of `a` and `b`. Each
-unrolled step unpacks one bit of `x` with `i` and branches on it, the
-carry and the two witness bits; a non-bit, a wrong sum bit or a carry out
-fails. `tests/test_zk.py` checks it exhaustively at `k = 2`, on malformed
-witnesses, and at `k = 8`. It costs 54,546 host contractions at `k = 8`
-and 111,574 at `k = 16`, about 6,800 a bit; in lean-ski's circuit, `k = 8`
-takes 129,114 rows and proves in 9.8 s (`release/skilark/split8` there).
-The cost is the kernel's: unary numerals and a quotation dispatch that
-grows with the program's quotations.
+**Predicates in zero knowledge (`skilark/zk.py`, 2026-09-29).** A Joy
+program is the verifier of a predicate statement over literal bits, which
+lean-ski's composed circuit proves: the hidden bits are constrained to
+Scott Booleans and handed to the verifier, never a hidden term.
+`vsplitB x r` decodes `2k` bits into two numbers, runs the program on the
+stack `x` above them, and returns `K` itself when it leaves a nonzero
+numeral; lean-ski's Lean front end compiles the whole source to the term
+`skijack` gives, so its verifier checks a statement against the source.
+The first predicate, `split`, adds the two numbers and compares the sum
+with `x`, by `k` unrolled ripple-carry steps. `tests/test_zk.py` checks it
+on every bit pattern at `k` = 2 and 3 (all 4,096 at `k = 4` were run once)
+and on samples at `k = 8`. It costs 53,450 host contractions at `k = 8`,
+about 6,700 per bit of `x` (3,300 per literal bit); in lean-ski's circuit, `k = 8` takes 129,965 rows
+(`release/skilark/split8` there). The cost is the kernel's: unary numerals
+and a quotation dispatch that grows with the program's quotations.
 
-*What it is not.* It is the pipeline, not a range proof, for two reasons.
-The witness is a hidden term, and a term answers the verifier's case
-analysis however it likes: `K (K (RVal R))`, with `R` a stack of `2k -
-1` zeros, is no stack at all and passes at `x` = 0 or 1 (pinned in
-`tests/test_zk.py` at `k` = 2 and 8). And some `a, b < 2^k` add up to every
-`x < 2^k`, so even a well-formed witness shows only `x < 2^k`. A range
-proof needs the witness as literal bits the circuit constrains, passed to
-the verifier, and a commitment binding the hidden number to something
-public. Jets under the hiding would cut the cost.
+*Why bits, not a witness term.* The same program over a hidden term,
+`vsplit x w`, can be fooled: a term answers the verifier's case analysis
+however it likes, and `K (K (RVal R))`, with `R` a stack of `2k - 1`
+zeros, is no stack at all and passes at `x` = 0 and 1 (pinned in the
+tests).
+
+*What it is not.* A range proof: some `a, b < 2^k` add up to every
+`x < 2^k`, so an accepted proof shows only `x < 2^k`. A range proof needs
+a commitment binding the hidden number to something public. Jets under
+the hiding would cut the cost.
 
 **Phase 4: write-up, if the numbers justify it.** The correspondence
 table, the two modes, the two-level dictionary, the census, and the laws

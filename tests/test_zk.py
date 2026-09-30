@@ -1,7 +1,8 @@
-"""skilark.zk: on witnesses that are stacks of bit numerals, the ``split``
-statement's verifier accepts exactly the bits of two numbers adding up to
-``x``; a witness that is no stack can still pass (the forgery pinned
-below)."""
+"""skilark.zk: over literal bits, ``vsplitB`` accepts exactly the bits of
+two numbers adding up to ``x`` (every bit pattern at k = 2 and 3, samples
+at k = 8).  Over a hidden term, ``vsplit`` can be fooled: a term that is
+no stack passes (pinned below), which is why lean-ski proves ``vsplitB``,
+as a predicate over literal bits."""
 
 import itertools
 import random
@@ -64,3 +65,31 @@ def test_forged_term_passes(k):
     forged = App(Atom("K"), App(Atom("K"), r))
     for x in (0, 1):
         assert t.verify(t.x(x), forged)[0], (k, x)
+
+
+# ---------------------------------------------------------------- literal bits
+
+@pytest.mark.parametrize("k", [2, 3])
+def test_bits_exhaustive(k):
+    t = zk.Terms(k)
+    for a, b, x in itertools.product(range(2 ** k), repeat=3):
+        assert t.verify_bits(t.x(x), t.bits(a, b))[0] == (a + b == x), (k, a, b, x)
+
+
+def test_bits_k8():
+    t = zk.Terms(8)
+    rng = random.Random(88)
+    for _ in range(4):
+        a, b = rng.randrange(256), rng.randrange(256)
+        x = a + b if a + b < 256 else rng.randrange(256)
+        assert t.verify_bits(t.x(x), t.bits(a, b))[0] == (a + b == x), (a, b, x)
+    assert t.verify_bits(t.x(200), t.bits(123, 77))[0]
+    assert not t.verify_bits(t.x(200), t.bits(123, 78))[0]
+    assert not t.verify_bits(t.x(200), t.bits(0, 0))[0]
+
+
+def test_decoder_shape():
+    assert zk.decoder(1) == "decBits qr0 = Push (bitNum qr0) Empty\n"
+    assert zk.decoder(2) == ("decBits qr0 = qr0 (\\qb0. \\qr1. Push (bitNum qb0) "
+                             "(Push (bitNum qr1) Empty))\n")
+

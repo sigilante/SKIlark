@@ -1,34 +1,36 @@
-"""SKIlark statements for lean-ski's zero-knowledge circuit.
+"""SKIlark predicates for lean-ski's zero-knowledge circuit.
 
-The circuit proves, in zero knowledge, that a hidden term ``w`` makes a
-public verifier ``V x w`` evaluate to ``K``.  A SKIlark statement is a
-Joy predicate: ``V x w`` runs the program on the stack ``x`` above ``w``
-(``appendS x w``) and accepts when it returns a nonzero numeral on top.
-``source`` returns the SKIjack text of ``V`` (``vsplit``), which the
-verifier compiles itself; ``Terms`` builds ``x`` and ``w``.
+lean-ski proves, in zero knowledge, a **predicate over literal bits**: a
+public verifier ``V`` accepts a public ``x`` on ``n`` hidden bits, which the
+circuit constrains to Scott Booleans (``K`` or ``K I``) and hands to ``V``
+as ``boolsT``, each bit paired with the rest.  ``V`` is a SKIlark program:
+it runs on the stack ``x`` above the decoded bits and accepts when it
+leaves a nonzero numeral on top, returning ``K`` itself.  ``source``
+returns the SKIjack text of ``V``, which lean-ski compiles itself;
+``Terms`` builds ``x`` and the bits.
 
-The first statement, ``split``, is that some hidden term ``w`` makes
-``vsplit x w`` reduce to ``K``.  On a witness that is a stack of bit
-numerals it reads two numbers ``a`` and ``b`` below ``2^k`` and accepts
-exactly when ``a + b = x``.  Numbers are bits, least significant first.
-The hidden ``w`` is a stack of ``2k`` numerals, ``a_0 b_0 a_1 b_1 …``;
-the public ``x`` is one quotation ``X_0``, ``X_i = [X_{i+1} x_i]`` and
-``X_{k-1} = [x_{k-1}]``.  Each step unpacks ``x_i`` with ``i``, sets the
-rest of ``X`` aside, and branches on ``x_i``, the carry, ``a_i`` and
-``b_i``: a bit other than ``0`` or ``1``, or a sum bit other than
-``x_i``, fails (``0 i`` errs), and the last step fails on a carry out.
+The first predicate, ``split``: ``vsplitB x r`` decodes ``2k`` bits into
+the bits of two numbers ``a`` and ``b`` (interleaved, least significant
+first) and accepts when ``a + b = x`` in ``k`` bits.  ``x`` is one
+quotation ``X_0``, ``X_i = [X_{i+1} x_i]`` and ``X_{k-1} = [x_{k-1}]``.
+Each step unpacks ``x_i`` with ``i``, sets the rest of ``X`` aside, and
+branches on ``x_i``, the carry, ``a_i`` and ``b_i``: a bit other than
+``0`` or ``1``, or a sum bit other than ``x_i``, fails (``0 i`` errs), and
+the last step fails on a carry out.  ``tests/test_zk.py`` checks it on
+every bit pattern at ``k`` = 2 and 3 (and it was run on all 4,096 at
+``k = 4``), and on samples at ``k = 8``.
 
-What an accepted ``w`` shows is weaker, in two ways, and this module is
-the path from a SKIlark program to a proof, not a range proof:
+Two limits:
 
-- ``w`` is a term, and a term answers the verifier's case analysis however
-  it likes: ``K (K (RVal R))``, with ``R`` a stack of ``2k - 1`` zeros, is
-  no stack at all and passes at ``x`` = 0 and 1 (``tests/test_zk.py`` pins
-  it at ``k`` = 2 and 8).  A claim about data needs the witness as
-  literal bits the circuit constrains to Booleans.
-- some ``a, b < 2^k`` add up to every ``x < 2^k`` (``a = x``, ``b = 0``),
-  so even a well-formed witness shows only that ``x < 2^k``.  A range
-  proof needs a commitment binding the hidden number to something public.
+- ``vsplit``, the same program over a hidden *term* ``w`` rather than
+  bits, can be fooled: a term answers the verifier's case analysis however
+  it likes, and ``K (K (RVal R))``, with ``R`` a stack of ``2k - 1``
+  zeros, is no stack at all and passes at ``x`` = 0 and 1 (pinned in the
+  tests).  That is why lean-ski proves ``vsplitB`` over literal bits.
+- the claim is weak: some ``a, b < 2^k`` add up to every ``x < 2^k``
+  (``a = x``, ``b = 0``), so an accepted proof shows only ``x < 2^k``.  A
+  range proof needs a commitment binding the hidden number to something
+  public.
 """
 
 from __future__ import annotations
@@ -86,9 +88,30 @@ def split_program(k: int) -> str:
     return "0 swap " + " ".join([_step(False)] * (k - 1) + [_step(True)])
 
 
+def decoder(n: int) -> str:
+    """``decBits``: ``n`` literal bits, the last alone and each before it
+    paired with the rest (lean-ski's ``boolsT``), to a stack of numerals,
+    the first on top.  A Scott pair applies its argument to its two
+    halves; a Scott Boolean selects: ``K`` is 1, ``K I`` is 0."""
+    if n < 1:
+        raise ValueError("n must be positive")
+    body = f"Push (bitNum qr{n - 1}) Empty"
+    for i in range(n - 2, -1, -1):
+        body = f"qr{i} (\\qb{i}. \\qr{i + 1}. Push (bitNum qb{i}) ({body}))"
+    return f"decBits qr0 = {body}\n"
+
+
+#: the predicate's verifier: ``vsplit`` on the decoded bits
+BITS = """
+-- the verifier over literal bits (lean-ski's predicate statements)
+bitNum b = b (Num (Suc Zero)) (Num Zero)
+vsplitB x r = vsplit x (decBits r)
+"""
+
+
 def source(k: int) -> str:
-    """The SKIjack text of ``vsplit`` for width ``k``."""
-    return joy.compiled({"split": split_program(k)}) + WRAPPER
+    """The SKIjack text of ``vsplit`` and ``vsplitB`` for width ``k``."""
+    return joy.compiled({"split": split_program(k)}) + WRAPPER + BITS + decoder(2 * k)
 
 
 # ------------------------------------------------------------ encoders
@@ -145,6 +168,27 @@ class Terms:
         da = da if da is not None else bits(a, self.k)
         db = db if db is not None else bits(b, self.k)
         return self.stack([self.num(d) for i in range(self.k) for d in (da[i], db[i])])
+
+    def bits(self, a: int, b: int, da: Optional[List[int]] = None, db: Optional[List[int]] = None):
+        """The literal bits of ``a`` and ``b``, interleaved, as lean-ski's
+        ``boolsT``: Scott Booleans in Scott pairs."""
+        da = da if da is not None else bits(a, self.k)
+        db = db if db is not None else bits(b, self.k)
+        bs = [d for i in range(self.k) for d in (da[i], db[i])]
+        K, I, S = Atom("K"), Atom("I"), Atom("S")
+        def boolT(d):
+            return K if d else App(K, I)
+        def pairT(p, q):
+            return App(App(S, App(App(S, I), App(K, p))), App(K, q))
+        out = boolT(bs[-1])
+        for d in reversed(bs[:-1]):
+            out = pairT(boolT(d), out)
+        return out
+
+    def verify_bits(self, x, r, max_steps: int = 50_000_000):
+        """``V x r`` for the predicate over literal bits, reduced."""
+        res = run_level0(App(App(self.t["vsplitB"], x), r), max_steps)
+        return isinstance(res.term, Atom) and res.term.name == "K", res.steps
 
     def verify(self, x, w, max_steps: int = 50_000_000):
         """``V x w`` reduced: whether it is exactly ``K``, and the steps."""
