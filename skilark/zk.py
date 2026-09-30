@@ -31,6 +31,15 @@ Two limits:
   (``a = x``, ``b = 0``), so an accepted proof shows only ``x < 2^k``.  A
   range proof needs a commitment binding the hidden number to something
   public.
+
+The committed split, ``csplit``: ``vcsplitB`` also reads ``m`` random bits
+``r`` and accepts when, besides ``a + b = x``, the knapsack sum of ``a``'s
+and ``r``'s public weights is the public ``c`` (``commit``).  The weights
+ride in ``x``, so every step runs the same Joy tree; the step adds
+``a_i``'s weight to a running sum, ``r``'s follow, and the wrapper compares
+the sum with ``c`` (``acceptEq``).  It is the shape of a committed range
+proof: at the demo's sizes (8 bits each, weights below 64) the commitment
+neither binds nor hides, since ``2^16`` openings map to 430 sums.
 """
 
 from __future__ import annotations
@@ -42,13 +51,16 @@ from skijack.run import run_level0
 
 from . import Run, joy
 
+#: Booleans, and a stack on top of another
+BASE = """bool === T | F
+appendS s t = s |> { Empty t; Push a u (Push a (appendS u t)) }
+"""
+
 #: the wrapper: ``V x w`` is ``accept`` of the program on ``x`` above ``w``
 WRAPPER = """
 -- the verifier: the program on the stack x above w, accepted when it
 -- returns a nonzero numeral on top (skilark.zk)
-bool === T | F
-appendS s t = s |> { Empty t; Push a u (Push a (appendS u t)) }
-accept r = r |> { RVal s (s |> { Empty F; Push a t (a |> { Num n (n |> { Zero F; Suc m T }); Quot q F }) }); RErr F; RTime F }
+""" + BASE + """accept r = r |> { RVal s (s |> { Empty F; Push a t (a |> { Num n (n |> { Zero F; Suc m T }); Quot q F }) }); RErr F; RTime F }
 vsplit x w = accept (csplit applyU (appendS x w))
 """
 
@@ -101,17 +113,94 @@ def decoder(n: int) -> str:
     return f"decBits qr0 = {body}\n"
 
 
+#: a literal bit as a numeral
+BITNUM = """bitNum b = b (Num (Suc Zero)) (Num Zero)
+"""
+
 #: the predicate's verifier: ``vsplit`` on the decoded bits
 BITS = """
 -- the verifier over literal bits (lean-ski's predicate statements)
-bitNum b = b (Num (Suc Zero)) (Num Zero)
-vsplitB x r = vsplit x (decBits r)
+""" + BITNUM + """vsplitB x r = vsplit x (decBits r)
 """
 
 
 def source(k: int) -> str:
     """The SKIjack text of ``vsplit`` and ``vsplitB`` for width ``k``."""
     return joy.compiled({"split": split_program(k)}) + WRAPPER + BITS + decoder(2 * k)
+
+
+# ------------------------------------------------------------ csplit
+
+#: the committed split's verifier: its program leaves ``C`` above ``S``,
+#: and it accepts when the two are equal numerals
+CWRAPPER = """
+-- the committed split's verifier: the program leaves the commitment C above
+-- the sum S it recomputed, and it accepts when they are equal (skilark.zk)
+eqN m n = m |> { Zero (n |> { Zero T; Suc q F }); Suc p (n |> { Zero F; Suc q (eqN p q) }) }
+acceptEq r = r |> { RVal s (s |> { Empty F; Push a t (a |> { Num m (t |> { Empty F; Push b u (b |> { Num n (eqN m n); Quot q F }) }); Quot q F }) }); RErr F; RTime F }
+vcsplit x w = acceptEq (ccsplit applyU (appendS x w))
+vcsplitB x r = vcsplit x (decBits r)
+"""
+
+
+def weights(k: int, m: int, seed: int = 1, bound: int = 64) -> List[int]:
+    """The knapsack's public weights, one per bit of ``a`` and of ``r``:
+    fixed pseudo-random numbers in ``[1, bound)``, from ``seed``."""
+    x, out = seed, []
+    for _ in range(k + m):
+        x = (x * 1103515245 + 12345) % 2 ** 31
+        out.append(1 + x % (bound - 1))
+    return out
+
+
+def commit(a: int, r: int, k: int, m: int, ws: List[int]) -> int:
+    """The toy commitment: the sum of the weights of ``a``'s and ``r``'s set
+    bits."""
+    return sum(w for w, d in zip(ws, bits(a, k) + bits(r, m)) if d)
+
+
+def _ctree(last: bool) -> str:
+    """Stack ``x A c S a b`` to ``c' S'`` (last: to ``S'``, failing on a
+    carry out): the sum's bit as in ``split``, and ``S`` plus the weight
+    ``A`` when ``a`` is set.  The weight comes from ``x``, so every step
+    runs the same tree."""
+    def leaf(x, c, a, b):
+        t = a + b + c
+        if t % 2 != x:
+            return "0 i"
+        if last:
+            return "" if t < 2 else "0 i"
+        return str(t // 2)
+    def on_a(x, c, a):
+        return ("swap + " if a else "pop ") + "swap " + _case(leaf(x, c, a, 0), leaf(x, c, a, 1))
+    return _case(*["swap " + _case(*["rot " + _case(on_a(x, c, 0), on_a(x, c, 1)) for c in (0, 1)])
+                   for x in (0, 1)])
+
+
+#: one bit of ``r``: stack ``B S r`` to ``S`` plus ``B`` when ``r`` is set
+_RSTEP = "rot " + _case("pop", "swap +")
+
+
+def csplit_program(k: int, m: int) -> str:
+    """The committed split.  The public ``x`` carries the weights: ``X_i =
+    [X_{i+1} A_i x_i]``, the last ``[[C W] A x]`` with ``W_j = [W_{j+1}
+    B_j]`` the weights of ``r``.  Carry and sum ``0`` go under ``X``; ``k``
+    steps of ``split`` add ``a``'s weights; the last leaves ``[C W]`` above
+    the sum; ``W``'s steps add ``r``'s weights, under ``C``; the program
+    ends with ``C`` above the sum."""
+    if k < 1 or m < 1:
+        raise ValueError("k and m must be positive")
+    steps = ["i rot [" + _ctree(False) + "] dip"] * (k - 1)
+    steps.append("i rot [" + _ctree(True) + "] dip")
+    tail = " ".join(["i swap [" + _RSTEP + "] dip"] * (m - 1) + ["i " + _RSTEP])
+    return "0 0 rot " + " ".join(steps) + " i swap [" + tail + "] dip"
+
+
+def csource(k: int, m: int) -> str:
+    """The SKIjack text of ``vcsplitB`` for ``a, b`` of ``k`` bits and ``r``
+    of ``m``; the weights are in ``x``."""
+    return (joy.compiled({"csplit": csplit_program(k, m)}) + "\n" + BASE + CWRAPPER + BITNUM
+            + decoder(2 * k + m))
 
 
 # ------------------------------------------------------------ encoders
@@ -196,8 +285,54 @@ class Terms:
         return isinstance(r.term, Atom) and r.term.name == "K", r.steps
 
 
+class CTerms(Terms):
+    """Terms of a compiled ``csource``: ``x`` with the commitment ``C`` in its
+    last quotation, and the literal bits of ``a``, ``b`` and ``r``."""
+
+    def __init__(self, k: int, m: int, ws: List[int]):
+        self.k, self.m, self.ws = k, m, ws
+        self.run = Run(csource(k, m), "compiled")
+        self.t = self.run.e.terms
+
+    def xc(self, x: int, c: int):
+        """``x``'s bits with ``a``'s weights, and last ``[C W]``, ``W`` the
+        weights of ``r``."""
+        ws, k, m = self.ws, self.k, self.m
+        w = self.quot([self.num(ws[k + m - 1])])
+        for j in range(m - 2, -1, -1):
+            w = self.quot([w, self.num(ws[k + j])])
+        cw = self.quot([self.num(c), w])
+        ds = bits(x, k)
+        q = self.quot([cw, self.num(ws[k - 1]), self.num(ds[-1])])
+        for i in range(k - 2, -1, -1):
+            q = self.quot([q, self.num(ws[i]), self.num(ds[i])])
+        return self.stack([q])
+
+    def cbits(self, a: int, b: int, r: int, extra: Optional[List[int]] = None):
+        """``a``'s and ``b``'s bits interleaved, then ``r``'s, as lean-ski's
+        ``boolsT``."""
+        bs = [d for i in range(self.k) for d in (bits(a, self.k)[i], bits(b, self.k)[i])] + bits(r, self.m)
+        K, I, S = Atom("K"), Atom("I"), Atom("S")
+        def boolT(d):
+            return K if d else App(K, I)
+        def pairT(p, q):
+            return App(App(S, App(App(S, I), App(K, p))), App(K, q))
+        out = boolT(bs[-1])
+        for d in reversed(bs[:-1]):
+            out = pairT(boolT(d), out)
+        return out
+
+    def verify_c(self, x, r, max_steps: int = 100_000_000):
+        res = run_level0(App(App(self.t["vcsplitB"], x), r), max_steps)
+        return isinstance(res.term, Atom) and res.term.name == "K", res.steps
+
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) != 2 or not sys.argv[1].isdigit():
-        sys.exit("usage: python -m skilark.zk K   (the SKIjack source of split for width K)")
-    sys.stdout.write(source(int(sys.argv[1])))
+    args = sys.argv[1:]
+    if len(args) == 1 and args[0].isdigit():
+        sys.stdout.write(source(int(args[0])))
+    elif len(args) == 3 and args[0] == "csplit" and args[1].isdigit() and args[2].isdigit():
+        sys.stdout.write(csource(int(args[1]), int(args[2])))
+    else:
+        sys.exit("usage: python -m skilark.zk K            (the SKIjack source of split for width K)\n"
+                 "       python -m skilark.zk csplit K M   (of csplit, a and b of K bits, r of M)")

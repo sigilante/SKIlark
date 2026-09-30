@@ -376,8 +376,19 @@ tests).
 
 *What it is not.* A range proof: some `a, b < 2^k` add up to every
 `x < 2^k`, so an accepted proof shows only `x < 2^k`. A range proof needs
-a commitment binding the hidden number to something public. Jets under
-the hiding would cut the cost.
+a commitment binding the hidden number to something public.
+
+*The committed split* (`csplit`). The verifier also reads `m` random bits
+`r` and checks a knapsack commitment to `a`: the public weights of `a`'s
+and `r`'s set bits sum to the public `c`. The weights ride in `x`, so each
+ripple step runs the same Joy tree: the kernel's quotation dispatch grows
+with the program's distinct quotations, and weights in the code made each
+step's tree distinct (256k host contractions against 201k). At `k = m = 8`
+it costs 200,884 host contractions, and in lean-ski's circuit 471,888
+rows (`release/skilark/csplit8` there). At these sizes the commitment
+neither binds nor hides: the `2^16` openings map to 430 sums, none above
+437, and `c = 255` alone opens to 157 values of `a`. Real parameters need
+jets under the hiding.
 
 **Phase 4: write-up, if the numbers justify it.** The correspondence
 table, the two modes, the two-level dictionary, the census, and the laws

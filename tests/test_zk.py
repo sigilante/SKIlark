@@ -93,3 +93,29 @@ def test_decoder_shape():
     assert zk.decoder(2) == ("decBits qr0 = qr0 (\\qb0. \\qr1. Push (bitNum qb0) "
                              "(Push (bitNum qr1) Empty))\n")
 
+
+
+# ---------------------------------------------------------------- committed split
+
+def test_csplit_exhaustive_k2_m2():
+    k, m = 2, 2
+    ws = zk.weights(k, m)
+    t = zk.CTerms(k, m, ws)
+    for a, b, r, x in itertools.product(range(4), repeat=4):
+        good = zk.commit(a, r, k, m, ws)
+        for c in {good, good + 1, 0}:
+            want = a + b == x and c == good
+            assert t.verify_c(t.xc(x, c), t.cbits(a, b, r))[0] == want, (a, b, r, x, c)
+
+
+def test_csplit_k8():
+    k, m = 8, 8
+    ws = zk.weights(k, m)
+    assert ws == [61, 13, 14, 5, 59, 34, 24, 10, 18, 50, 3, 51, 26, 6, 57, 6]
+    t = zk.CTerms(k, m, ws)
+    c = zk.commit(123, 181, k, m, ws)
+    assert c == 255
+    assert t.verify_c(t.xc(200, c), t.cbits(123, 77, 181))[0]
+    assert not t.verify_c(t.xc(200, c), t.cbits(123, 77, 180))[0]     # another r
+    assert not t.verify_c(t.xc(200, c), t.cbits(124, 76, 181))[0]     # another split
+    assert not t.verify_c(t.xc(200, c + 1), t.cbits(123, 77, 181))[0]  # another c

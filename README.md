@@ -23,7 +23,9 @@ namespace.
   circuit proves. `split` adds two hidden bit strings and compares the sum
   with `x`; `python -m skilark.zk 8` writes its SKIjack source, which
   lean-ski compiles and proves. The pipeline is sound; the statement is
-  weak, not yet a range proof (`PLAN.md` §3 says why).
+  weak, not yet a range proof (`PLAN.md` §3 says why). `csplit` adds a
+  knapsack commitment to `a` (`python -m skilark.zk csplit 8 8`): the
+  shape of a committed range proof, at toy sizes.
 - `PLAN.md` — what is built, what was measured, and what comes next.
 
 ```
