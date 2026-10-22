@@ -1,9 +1,18 @@
 name: CI
 
+# A change only to prose skips CI.
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - "**/*.md"
+      - "img/**"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "img/**"
+      - "LICENSE"
 
 jobs:
   test:
