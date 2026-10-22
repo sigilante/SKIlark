@@ -1,11 +1,18 @@
 """``python -m skilark "3 [dup +] i"``: run a Joy program in the
 interpreted and the compiled form and print each outcome with its host
-contraction count.  ``--define "sq == dup +"`` adds a definition."""
+contraction count.  ``--define "sq == dup +"`` adds a definition.
+``--reducer avon`` runs the reductions in Avon, the C runtime, and
+``--reducer check`` in both, compared; either needs ``AVON``, the path of
+an ``avon`` binary (skijack's ``SKIJACK_REDUCER``)."""
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import os
 import sys
+
+from skijack import SkijackError
 
 from . import compiled, interpreted, joy
 
@@ -18,11 +25,27 @@ def main(argv=None) -> int:
                     help='a definition, "name == body"; may repeat')
     ap.add_argument("--form", choices=["interpreted", "compiled", "both"],
                     default="both")
+    ap.add_argument("--reducer", choices=["aviary", "avon", "check"],
+                    help="what reduces the terms: aviary in Python (the default), "
+                         "Avon, or both compared; avon and check need AVON")
     args = ap.parse_args(argv)
+    if args.reducer:
+        if importlib.util.find_spec("skijack.avon") is None:
+            ap.error("--reducer needs a skijack with skijack.avon, the Avon reducer "
+                     "(SKIjack's master, until its next release)")
+        os.environ["SKIJACK_REDUCER"] = args.reducer
     defs = dict(joy.DEFINITIONS, **joy.parse_definitions("\n".join(args.define)))
     forms = ["interpreted", "compiled"] if args.form == "both" else [args.form]
+    try:
+        return _run(forms, args.program, defs)
+    except SkijackError as ex:                  # a reducer misconfigured, say
+        print(f"skilark: {ex}", file=sys.stderr)
+        return 1
+
+
+def _run(forms, program, defs) -> int:
     for form in forms:
-        run = (interpreted if form == "interpreted" else compiled)({"p": args.program}, defs)
+        run = (interpreted if form == "interpreted" else compiled)({"p": program}, defs)
         for pre, label in (("u", "unfuelled"), ("r", "fuelled")):
             (ctor, stack), steps = run.run(pre + "p")
             shown = ctor if stack is None else " ".join(_show(x) for x in stack)

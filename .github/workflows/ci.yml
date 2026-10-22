@@ -18,3 +18,34 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[test]"
       - run: python -m pytest -q
+
+  # The suite on Avon: every reduction run by Avon and by aviary and
+  # compared, then the level-1 measurements, which are slow in Python, on
+  # Avon alone.  Avon and skijack are pinned to the commits that have the
+  # reducer switch, until skijack's next release carries it.
+  avon:
+    runs-on: ubuntu-24.04
+    env:
+      AVON_REF: 65ae1a5b24d9813566cfd2eb38f8c01707da8259      # sigilante/avon #60, batch --dag
+      SKIJACK_REF: 14e1aa8707ccc58ca13c02c2723f669fc979a1cf   # sigilante/SKIjack #20, SKIJACK_REDUCER
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: sigilante/avon
+          ref: ${{ env.AVON_REF }}
+          path: .avon        # a dot directory, which pytest does not collect
+      - run: make -C .avon -j4 CC=clang-18 build/avon
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "skijack @ git+https://github.com/sigilante/SKIjack@${SKIJACK_REF}#subdirectory=python"
+      - run: pip install -e ".[test]"
+      - run: python -m pytest -q
+        env:
+          AVON: ${{ github.workspace }}/.avon/build/avon
+          SKIJACK_REDUCER: check
+      - run: python -m pytest -q --runslow
+        env:
+          AVON: ${{ github.workspace }}/.avon/build/avon
+          SKIJACK_REDUCER: avon
