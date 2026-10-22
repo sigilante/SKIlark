@@ -1,11 +1,13 @@
 # SKIlark: Joy on SKIjack
 
-> **Status (2026-09-29).** Phases 1 and 2 built; predicates in zero
+> **Status (2026-10-23).** Phases 1–3 built; predicates in zero
 > knowledge (§3) built. `skilark/programs/`
 > holds the kernel and the phase-1 programs; `skilark/joy.py` is the front
-> end in three forms; `tests/` pins every number in §1 (the level-1 runs
-> under `--runslow`). Phases 3–4 are plans. Where this document and the
-> tests differ, the tests are authoritative.
+> end in three forms; `skilark/variants.py` is the kernel's loop and fuel
+> in variants; `tests/` pins every number in §1 and §3 (the level-1 runs
+> under `--runslow`). Phase 3 closed with a decision on `Do` and one on
+> fuel; Phase 4 is a short write-up, after the kernel takes Church fuel.
+> Where this document and the tests differ, the tests are authoritative.
 
 *A concatenative language in the line of Joy (von Thun) and Kerby's* Theory
 of Concatenative Combinators*, hosted on SKIjack: its words are SKIjack
@@ -349,8 +351,66 @@ builds into its datapath instead of its opcode list:
 
 So the oracle's answer is negative for the word list and positive for
 the machine: jet the representation (constructors, dispatch, counters),
-not the words. `Do`'s splice and the CPS alternative are not yet
-measured, so the decision on `Do` is still open.
+not the words.
+
+*The loop and the fuel (2026-10-23; `skilark/variants.py`).* The kernel
+with one piece replaced at a time, run on the eight programs of §1b.
+Host contractions, summed over the eight (`tests/test_variants.py` pins
+each program):
+
+| loop | fuel | fuelled | unfuelled |
+|---|---|---:|---:|
+| splice (the kernel) | computed (the kernel) | 339,917 | 93,045 |
+| splice | literal | 102,917 | |
+| splice | Church | 85,558 | |
+| stack | computed | 422,374 | 123,771 |
+| stack | literal | 144,380 | |
+| sequenced | computed | 383,889 | 82,241 |
+| sequenced | literal | 118,410 | |
+
+The *splice* is the kernel's loop: `Do`, `Dip` and `Ifz` run `cat r q`.
+The *stack* loop keeps the continuation as data, `ctl === Halt | Ret
+prog ctl`, and copies nothing. The *sequenced* loop runs a quotation to
+its result and the rest of the program on that result's stack. *Computed*
+fuel is the kernel's `fuel := mul ten (add ten ten)`; *literal* is the
+same 200 written out as `Suc`s; *Church* is no numeral at all, the
+loop's body applied 200 times (`c200 loopC timeC`).
+
+*Fuel.* The kernel's fuel costs more than the programs it bounds:
+fuelled runs take 3.65 times the unfuelled. The numeral is computed as
+it is consumed, at about 1,200 contractions a unit on `1 2 + dup +`
+(7,262 for six units), against 47 a unit for the literal. Church fuel
+costs nothing a unit: its fuelled runs take 0.92 of the unfuelled loop,
+whose self-reference through the expander's fixpoint costs more than one
+unfolding. The compiled form gives the same order, 117,770 computed,
+42,284 literal and 31,632 Church against 32,778 unfuelled. Church fuel
+stops a run at the same word as the Scott numeral: one unit a word and
+one at `Done`, so `1 2 + dup +` needs 6 and `3 sumto` 66, and the
+divergent `[dup i] dup i` stops at every bound tried.
+**Decision: fuel becomes a Church numeral**, in the kernel and the
+compiled form. That re-pins every fuelled count here and the census
+exports Avon's fixtures check, so it is its own change.
+
+*`Do`.* The splice copies the quotation it runs once, so it costs a
+constant factor of the run, not an asymptotic one. `[P] i` against `P`,
+unfuelled, with `P` 10, 40 and 160 words of `1 pop`, costs 1,408, 4,123
+and 23,983 more: 100 to 150 contractions a word copied, beside 330 to
+400 a word to run it. Neither alternative pays:
+
+- the stack loop's `Do` costs 1,158 to 1,608 at any length, but every
+  word now passes the continuation through `step` as one more argument,
+  and that costs 41% a word (90,297 against 63,944 for 160 words). It
+  takes 1.33 times the splice on the eight programs, 1.24 fuelled.
+- the sequenced loop's `Do` costs 781 to 1,081 at any length and takes
+  0.88 of the splice unfuelled. Fuelled, the fuel left must come back in
+  every result: 1.13 times the splice with computed fuel and 1.15 with
+  literal. Church fuel left would be a function, and the kernel keeps
+  every field first-order.
+
+**Decision: `Do` stays a splice.** With Church fuel its fuelled runs
+take 85,558 contractions, a quarter of today's 339,917 and below
+today's unfuelled 93,045; the best fuelled alternative, sequenced with
+literal fuel, takes 118,410.
 
 **Predicates in zero knowledge (`skilark/zk.py`, 2026-09-29).** A Joy
 program is the verifier of a predicate statement over literal bits, which
@@ -393,10 +453,20 @@ closes at this toy scope: a full adder written natively in SKIjack costs
 about 800 of them, and sound parameters need tens of thousands. A real
 commitment needs its hash computed outside the reduction, a data jet.
 
-**Phase 4: write-up, if the numbers justify it.** The correspondence
-table, the two modes, the two-level dictionary, the census, and the laws
-as jet obligations. Stack-effect typing (depth, not just shape: Diggins's
-Cat, Kleffner's thesis, Mirth) is a separate thread and is not promised.
+**Phase 4: write-up.** The numbers justify a short one. Beside the
+correspondence table, the two modes, the two-level dictionary and the
+laws as jet obligations, Phase 3 gives it three measured results: the
+compiled form runs the programs in 35% of the interpreted form's
+contractions; on SKI the representation is what costs, since the census
+ranks constructors, dispatch and counters and never the words, and
+Church fuel removes three quarters of a fuelled run; and copying a
+quotation is cheaper than threading a continuation, because one more
+argument through `step` costs more than the copy. They are host
+contractions on one small kernel, which makes a workshop paper rather
+than a journal one. Church fuel goes into the kernel first, so the
+paper's counts are the kernel's. Stack-effect typing (depth, not just
+shape: Diggins's Cat, Kleffner's thesis, Mirth) is a separate thread and
+is not promised.
 No mechanized verification of a Joy or Forth implementation is known to
 this plan to cite; Kleffner's typed calculus is the nearest formal
 treatment, and Joy's laws were argued on paper.
@@ -408,12 +478,14 @@ treatment, and Joy's laws were argued on paper.
   `expand.py` fixpoint tying.
 - **Splice is linear in the quotation.** In the interpreted form every
   `Do`, `Dip` and `Ifz` copies its quotation before the continuation; the
-  compiled form does not splice. Phase 3 measures the two against a CPS
-  interpreter.
-- **Fuel dominates the counts.** `1 2 + dup +` costs 1,923 contractions
-  without fuel and 9,276 with it; the numeral is forced lazily at each
-  word. Phase 3 should try fuel as a Church numeral or a cheaper
-  decrement before comparing modes.
+  compiled form does not splice. Measured in §3: 100 to 150 contractions
+  a word copied, a constant factor of running it, and both alternatives
+  cost more. The splice stays.
+- **Fuel dominates the counts.** `1 2 + dup +` costs 2,014 contractions
+  without fuel and 9,276 with it, since the numeral is computed as it is
+  consumed. Church fuel brings it to 1,994 (§3). Until the kernel takes
+  it, every pinned fuelled count includes the computed numeral, so
+  compare the modes unfuelled.
 - **Closed sums.** `item` and `word` are fixed at compile time; extending
   either is a re-compile, as extending SKIjack's `term5` is. That is the
   intended story and the write-up says so before a reviewer does.
@@ -421,14 +493,17 @@ treatment, and Joy's laws were argued on paper.
   `Qcons`; Kerby's `k` and `y` are `kComb` and `yComb` in the phase-1
   file and `k`, `y` in the front end's definitions.
 - **Level 1 is slow.** A thousand host contractions per emulated step
-  puts the level-1 runs at minutes each; they are measured, recorded and
-  gated behind `--runslow`, not run on every push.
+  puts the level-1 runs at minutes each on the reference reducer; they
+  are measured, recorded and gated behind `--runslow`, not run on every
+  push. On Avon (`SKIJACK_REDUCER=avon`) the whole suite, these runs
+  included, takes 53 s.
 - **The name.** SKIlark is a working name.
 
 ## 5. Acceptance
 
-Phase 1: `tests/test_joy.py` green on `skijack` 0.2.0 in both lexicons.
+Phase 1: `tests/test_joy.py` green on `skijack` 0.2.1 in both lexicons.
 Phase 2: `tests/test_modes.py` pins the eight programs and eight laws in
 both forms; `tests/test_level1.py` pins the reader and, under
 `--runslow`, the four namespace runs. Phase 3: the census table is here
-and in SKIjack's `RUNTIME-DESIGN.md` §8.
+and in SKIjack's `RUNTIME-DESIGN.md` §8, and `tests/test_variants.py`
+pins the loop and fuel variants behind the decisions on `Do` and fuel.

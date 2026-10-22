@@ -26,6 +26,11 @@ namespace.
   weak, not yet a range proof (`PLAN.md` §3 says why). `csplit` adds a
   knapsack commitment to `a` (`python -m skilark.zk csplit 8 8`): the
   shape of a committed range proof, at toy sizes.
+- `skilark/variants.py` — phase 3's measurements: the kernel with its
+  loop (the splice, a continuation stack, results sequenced) or its fuel
+  (computed, literal, Church) replaced, on the phase-2 programs
+  (`python -m skilark.variants`). Church fuel cuts a fuelled run to a
+  quarter; the splice stays (`PLAN.md` §3).
 - `PLAN.md` — what is built, what was measured, and what comes next.
 
 ```
