@@ -1,5 +1,6 @@
 """Phase 2: the same Joy programs through the front end in its three
-forms.  Every number here was measured on skijack 0.2.0.
+forms.  Every number here was measured on skijack 0.2.0, and holds on
+0.2.1.
 """
 
 import pytest

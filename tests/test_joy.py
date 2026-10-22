@@ -1,5 +1,6 @@
 """The kernel, the programs and the laws of PLAN.md, pinned.  Every number
-here was measured on skijack 0.2.0; stacks are read bottom to top.
+here was measured on skijack 0.2.0, and holds on 0.2.1; stacks are read
+bottom to top.
 """
 
 import pytest

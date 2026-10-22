@@ -31,8 +31,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     if args.reducer:
         if importlib.util.find_spec("skijack.avon") is None:
-            ap.error("--reducer needs a skijack with skijack.avon, the Avon reducer "
-                     "(SKIjack's master, until its next release)")
+            ap.error("--reducer needs skijack 0.2.1 or later, which has skijack.avon, "
+                     "the Avon reducer")
         os.environ["SKIJACK_REDUCER"] = args.reducer
     defs = dict(joy.DEFINITIONS, **joy.parse_definitions("\n".join(args.define)))
     forms = ["interpreted", "compiled"] if args.form == "both" else [args.form]
