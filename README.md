@@ -43,6 +43,24 @@ compiled     unfuelled        428  6
 compiled     fuelled        2,993  6
 ```
 
+Every reduction runs through SKIjack, by default in Python on
+`aviary-kernel`'s algorithm.  [Avon](https://github.com/sigilante/avon), a
+C runtime, runs the same reductions: build it (`make` in an Avon checkout),
+then
+
+```
+export AVON=/path/to/avon/build/avon
+python -m skilark --reducer avon  "3 [dup +] i"    # reduced by Avon
+python -m skilark --reducer check "3 [dup +] i"    # by both, compared
+SKIJACK_REDUCER=avon python -m pytest -q --runslow  # the suite, on Avon
+```
+
+Avon runs in its copy mode, the reference host's algorithm, so every
+contraction count above, and every one the tests pin, is the same on both.
+The reducer switch is SKIjack's (`SKIJACK_REDUCER`), new since skijack
+0.2.0: until SKIjack's next release, install skijack from its repository's
+`python/` directory to use it.
+
 ```python
 >>> from skilark import Joy, compiled
 >>> Joy().run("r7")                                   # 3 sumto, by Kerby's y
