@@ -2,7 +2,8 @@
 ``wfN``, with a definition in the namespace read by scry.  These runs take
 minutes on the reference reducer, so they are ``slow`` (``--runslow``);
 their numbers were measured once on skijack 0.2.0 and are recorded in
-PLAN.md.  The fast tests below check the generated source and the reader.
+PLAN.md; they hold on 0.2.1, where Avon runs them in under a minute
+(``SKIJACK_REDUCER=avon``).  The fast tests below check the generated source and the reader.
 """
 
 import pytest

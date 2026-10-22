@@ -57,9 +57,8 @@ SKIJACK_REDUCER=avon python -m pytest -q --runslow  # the suite, on Avon
 
 Avon runs in its copy mode, the reference host's algorithm, so every
 contraction count above, and every one the tests pin, is the same on both.
-The reducer switch is SKIjack's (`SKIJACK_REDUCER`), new since skijack
-0.2.0: until SKIjack's next release, install skijack from its repository's
-`python/` directory to use it.
+The reducer switch is SKIjack's (`SKIJACK_REDUCER`), from skijack 0.2.1,
+which SKIlark requires.
 
 ```python
 >>> from skilark import Joy, compiled
