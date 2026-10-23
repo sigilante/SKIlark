@@ -1,6 +1,8 @@
 """Phase 3's measurements: the kernel's loop and its fuel, in variants.
 
-The kernel (``programs/kernel.ascii.ski``) runs a program by a fold that
+The basis kernel (``programs/basis.ascii.ski``: Joy's basis, the kernel
+as phase 3 measured it, before ``kernel.ascii.ski`` grew toward Joy in
+full) runs a program by a fold that
 *splices*: ``Do``, ``Dip`` and ``Ifz`` copy their quotation onto the
 front of the continuation with ``cat``.  Its fuel is a Church numeral,
 the loop's body applied 200 times.  This module builds the same kernel
@@ -60,7 +62,9 @@ PROGRAMS = {
 
 FUEL = 200
 
-_K = joy._kernel()
+#: the basis kernel, which every interpreted variant replaces a piece of
+BASIS = (joy.DIR / "basis.ascii.ski").read_text(encoding="utf-8")
+_K = BASIS
 _STEP = _K[_K.index("step ex w q s = "):_K.index("-- The same loop without fuel")]
 
 
@@ -169,7 +173,6 @@ def compiled(fuel: str, programs: Dict[str, str] = PROGRAMS) -> Run:
     numeral = ("fuelS := mul tenS (add tenS tenS)" if fuel == "computed"
                else f"fuelS := {nat(FUEL)}")
     src += ("\n-- the eliminator before Church fuel: a Scott numeral, one unit per apply\n"
-            "mul m n = n |> { Zero Zero; Suc k (add m (mul m k)) }\n"
             "tenS  := add five five\n"
             f"{numeral}\n"
             f"applyS f q s = f |> {{ Zero RTime; Suc g (q |> {{{cases}}}) }}\n")

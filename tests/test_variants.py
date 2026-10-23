@@ -1,12 +1,13 @@
 """Phase 3: the kernel's loop and fuel in variants (``skilark.variants``),
 pinned on the phase-2 programs.  Every count is host contractions on
-skijack 0.2.1; ``PLAN.md`` §3 records the tables and the decisions.
+skijack 0.2.1; ``PLAN.md`` §3 records the tables and the decisions.  The
+interpreted variants run the basis kernel (``programs/basis.ascii.ski``).
 Church fuel is the kernel's; the Scott fuels are what it had before.
 """
 
 import pytest
 
-from skilark import Run, joy
+from skilark import Run
 from skilark import variants as V
 from skilark.joy import DEFINITIONS, _programs, datum, nat
 from test_modes import COMPILED, INTERPRETED
@@ -49,10 +50,10 @@ def test_every_loop_and_fuel_gives_the_kernels_outcomes(loop, fuel):
             assert u == UNFUELLED[loop][i], (p, u)
 
 
-def test_the_splice_with_church_fuel_is_the_kernel():
-    t = V.table(V.interpreted("splice", "church"))
-    assert {p: (o, n) for p, (o, n, u) in t.items()} == \
-        {p: (o, n) for p, (o, u, n) in INTERPRETED.items()}
+def test_the_compiled_forms_church_fuel_is_the_compiled_form():
+    """The interpreted variants run the basis kernel, which the front end
+    has outgrown; the compiled form of these programs, which use no truth
+    value, is the front end's own."""
     t = V.table(V.compiled("church"))
     assert {p: (o, n) for p, (o, n, u) in t.items()} == \
         {p: (o, n) for p, (o, u, n) in COMPILED.items()}
@@ -72,7 +73,7 @@ def test_church_fuel_times_out_where_scott_fuel_does():
     same word: one unit per word, and one at ``Done``."""
     progs = {"p1": "1 2 + dup +", "p7": "3 sumto", "loop": "[dup i] dup i"}
     ns = (5, 6, 65, 66)
-    src = [joy._kernel(), V.SCOTT]
+    src = [V.BASIS, V.SCOTT]
     src += [V.church(n) + f"f{n} := {nat(n)}\n" for n in ns]
     for name, prog in _programs(progs, DEFINITIONS).items():
         src.append(f"p{name} := {datum(prog)}\n")

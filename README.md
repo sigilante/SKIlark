@@ -8,9 +8,13 @@ compositions of those words, and its dictionary is the program's own
 namespace.
 
 - `skilark/programs/kernel.ascii.ski` — the kernel: Joy's basis `dup swap
-  pop cons cat unit dip i` plus `ifz`, literals, quotations and `+`, run by
-  a fold over the program (`exec`, one unit of fuel per word, the fuel a
-  Church numeral; `execU`, no fuel).
+  pop cons cat unit dip i` plus `ifz`, literals, quotations and `+`, and
+  Joy's next words, `* succ pred max min = <`, the truth values `true
+  false` with `and or not`, `branch` and `ifte` (`> <= >= != xor` are
+  derived), run by a fold over the program (`exec`, one unit of fuel per
+  word, the fuel a Church numeral; `execU`, no fuel). SKIlark grows toward
+  Joy in full, in stages (`PLAN.md` §3); numbers are naturals so far.
+  `basis.ascii.ski` is the basis alone, as phase 3 measured it.
 - `skilark/programs/joy.{ascii,unicode}.ski` — the kernel with a
   hand-written set of programs and Joy's laws (phase 1).
 - `skilark/joy.py` — the front end. Joy text to SKIjack source in three
@@ -39,12 +43,13 @@ pip install -e ".[test]"
 python -m pytest -q              # the level-1 measurements need --runslow
 python -m skilark "3 [dup +] i"
 python -m skilark --define "sq == dup +" "1 2 + sq"
+python -m skilark "5 fact"                # by ifte and Kerby's y
 ```
 
 ```
 $ python -m skilark "3 [dup +] i"
-interpreted  unfuelled      2,029  6
-interpreted  fuelled        2,018  6
+interpreted  unfuelled      3,493  6
+interpreted  fuelled        3,482  6
 compiled     unfuelled        428  6
 compiled     fuelled          442  6
 ```
