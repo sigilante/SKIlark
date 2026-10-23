@@ -6,16 +6,18 @@
 -- `Qcons` is Joy's `cons`: `Cons` names the path constructor by SKIjack's
 -- rule (SPEC section 8) and constructor names are global.
 -- Quotations are data: `Quot` holds a program, not a function, so every
--- field is first-order and `Do` is a splice.  Derived words are equations
--- whose values are programs: the program's own names are its dictionary.
+-- field is first-order and `Do` is a splice.  A quotation is also Joy's
+-- list: its elements are items, a word among them a symbol (`Sym`), which
+-- runs when it is spliced back.  Derived words are equations whose values
+-- are programs: the program's own names are its dictionary.
 -- Integers are signed and unbounded, a sign and a unary magnitude: `Pos m`
 -- is m and `Neg m` is -(m+1), so zero is only `Pos Zero`.
 nat     === Zero | Suc nat
 int     === Pos nat | Neg nat
 logical === False | True
-item    === Num int | Quot prog | Logical logical
+item    === Num int | Quot prog | Logical logical | Sym word
 stack   === Empty | Push item stack
-word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit int | Quote prog | Add | Sub | Mul | Div | Rem | Succ | Pred | Max | Min | Eql | Lt | Truth logical | And | Or | Not | Branch | Ifte | Choose stack
+word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit int | Quote prog | Add | Sub | Mul | Div | Rem | Eql | Lt | Truth logical | Branch | Ifte | Uncons | Null | Small | Choose stack
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
 
@@ -28,8 +30,6 @@ monus m n = n |> { Zero m; Suc j (m |> { Zero Zero; Suc i (monus i j) }) }
 divN m n = less m n |> { False (Suc (divN (monus m n) n)); True Zero }
 remN m n = less m n |> { False (remN (monus m n) n); True m }
 -- truth values
-both a b = a |> { False False; True b }
-either a b = a |> { False b; True True }
 flip a = a |> { False True; True False }
 iff a b = a |> { False (flip b); True b }
 -- integers: m - n of naturals, -k, the magnitude, the sign as a truth value
@@ -46,11 +46,39 @@ divide a b = signed (iff (isNeg a) (flip (isNeg b))) (divN (mag a) (mag b))
 modulo a b = signed (isNeg a) (remN (mag a) (mag b))
 lessZ a b = a |> { Pos m (b |> { Pos n (less m n); Neg n False }); Neg m (b |> { Pos n True; Neg n (less n m) }) }
 sameZ a b = a |> { Pos m (b |> { Pos n (same m n); Neg n False }); Neg m (b |> { Pos n False; Neg n (same m n) }) }
-succZ z = z |> { Pos m (Pos (Suc m)); Neg m (negN m) }
-predZ z = z |> { Pos m (m |> { Zero (Neg Zero); Suc k (Pos k) }); Neg m (Neg (Suc m)) }
+-- Joy's null and small read a number as an aggregate of its size
+zero z = z |> { Pos m (m |> { Zero True; Suc k False }); Neg m False }
+upToOne z = z |> { Pos m (m |> { Zero True; Suc k (k |> { Zero True; Suc j False }) }); Neg m False }
 cat p q = p |> { Done q; Then w r (Then w (cat r q)) }
--- the word that pushes an item back: cons, unit and dip re-quote a datum
-wordOf a = a |> { Num n (Lit n); Quot r (Quote r); Logical b (Truth b) }
+-- a quotation's element as an item, and back: a literal is its value, any
+-- other word a symbol
+itemOf w = w |> { Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit n (Num n); Quote r (Quot r); Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Truth b (Logical b); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Choose v (Sym w) }
+wordOf a = a |> { Num n (Lit n); Quot r (Quote r); Logical b (Truth b); Sym w w }
+-- a word's place in the sum, so that = compares two symbols by name
+w1 := Suc Zero
+w2 := Suc w1
+w3 := Suc w2
+w4 := Suc w3
+w5 := Suc w4
+w6 := Suc w5
+w7 := Suc w6
+w8 := Suc w7
+w9 := Suc w8
+w10 := Suc w9
+w11 := Suc w10
+w12 := Suc w11
+w13 := Suc w12
+w14 := Suc w13
+w15 := Suc w14
+w16 := Suc w15
+w17 := Suc w16
+w18 := Suc w17
+w19 := Suc w18
+w20 := Suc w19
+w21 := Suc w20
+w22 := Suc w21
+w23 := Suc w22
+wordNo w = w |> { Dup Zero; Swap w1; Pop w2; Qcons w3; Cat w4; Unit w5; Dip w6; Do w7; Lit n w8; Quote r w9; Add w10; Sub w11; Mul w12; Div w13; Rem w14; Eql w15; Lt w16; Truth b w17; Branch w18; Ifte w19; Uncons w20; Null w21; Small w22; Choose v w23 }
 
 -- the words' results, x below y on the stack
 addI n m = Num (plus n m)
@@ -58,19 +86,10 @@ subI n m = Num (plus n (minus m))
 mulI n m = Num (times n m)
 divI n m = Num (divide n m)
 remI n m = Num (modulo n m)
-maxI n m = Num (lessZ n m |> { False n; True m })
-minI n m = Num (lessZ n m |> { False m; True n })
-succI n = Num (succZ n)
-predI n = Num (predZ n)
 lessI n m = Logical (lessZ n m)
-bothI b c = Logical (both b c)
-eitherI b c = Logical (either b c)
--- a word of two numbers, of two with a nonzero divisor, of one, of two
--- truth values
-num2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (f n m) u)); Quot r RErr; Logical c RErr }); Quot r RErr; Logical c RErr }) }) }
-div2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (mag m |> { Zero RErr; Suc k (ex q (Push (f n m) u)) }); Quot r RErr; Logical c RErr }); Quot r RErr; Logical c RErr }) }) }
-num1 f ex q s = s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (f n) t)); Quot r RErr; Logical c RErr }) }
-log2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m RErr; Quot r RErr; Logical d (b |> { Num n RErr; Quot r RErr; Logical c (ex q (Push (f c d) u)) }) }) }) }
+-- a word of two numbers, and of two with a nonzero divisor
+num2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (f n m) u)); Quot r RErr; Logical c RErr; Sym y RErr }); Quot r RErr; Logical c RErr; Sym y RErr }) }) }
+div2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (mag m |> { Zero RErr; Suc k (ex q (Push (f n m) u)) }); Quot r RErr; Logical c RErr; Sym y RErr }); Quot r RErr; Logical c RErr; Sym y RErr }) }) }
 
 -- Fuel is a Church numeral: exec f runs at most f words, each one
 -- unfolding of the loop's body (Done takes one more), and nothing is
@@ -86,11 +105,11 @@ step ex w q s = w |> {
   Dup     (s |> { Empty RErr; Push a t (ex q (Push a (Push a t))) });
   Swap    (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push b (Push a u))) }) });
   Pop     (s |> { Empty RErr; Push a t (ex q t) });
-  Qcons   (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex q (Push (Quot (Then (wordOf b) r)) u)) }); Logical c RErr }) });
-  Cat     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (b |> { Num m RErr; Quot l (ex q (Push (Quot (cat l r)) u)); Logical c RErr }) }); Logical c RErr }) });
+  Qcons   (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex q (Push (Quot (Then (wordOf b) r)) u)) }); Logical c RErr; Sym y RErr }) });
+  Cat     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (b |> { Num m RErr; Quot l (ex q (Push (Quot (cat l r)) u)); Logical c RErr; Sym y RErr }) }); Logical c RErr; Sym y RErr }) });
   Unit    (s |> { Empty RErr; Push a t (ex q (Push (Quot (Then (wordOf a) Done)) t)) });
-  Dip     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex (cat r (Then (wordOf b) q)) u) }); Logical c RErr }) });
-  Do      (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex (cat r q) t); Logical c RErr }) });
+  Dip     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex (cat r (Then (wordOf b) q)) u) }); Logical c RErr; Sym y RErr }) });
+  Do      (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex (cat r q) t); Logical c RErr; Sym y RErr }) });
   Lit n   (ex q (Push (Num n) s));
   Quote r (ex q (Push (Quot r) s));
   Add     (num2 addI ex q s);
@@ -98,19 +117,15 @@ step ex w q s = w |> {
   Mul     (num2 mulI ex q s);
   Div     (div2 divI ex q s);
   Rem     (div2 remI ex q s);
-  Succ    (num1 succI ex q s);
-  Pred    (num1 predI ex q s);
-  Max     (num2 maxI ex q s);
-  Min     (num2 minI ex q s);
-  Eql     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (Logical (sameZ n m)) u)); Quot r RErr; Logical c RErr }); Quot r RErr; Logical d (b |> { Num n RErr; Quot r RErr; Logical c (ex q (Push (Logical (iff c d)) u)) }) }) }) });
+  Eql     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (Logical (sameZ n m)) u)); Quot r RErr; Logical c RErr; Sym z RErr }); Quot r RErr; Logical d (b |> { Num n RErr; Quot r RErr; Logical c (ex q (Push (Logical (iff c d)) u)); Sym z RErr }); Sym y (b |> { Num n RErr; Quot r RErr; Logical c RErr; Sym z (ex q (Push (Logical (same (wordNo z) (wordNo y))) u)) }) }) }) });
   Lt      (num2 lessI ex q s);
   Truth b (ex q (Push (Logical b) s));
-  And     (log2 bothI ex q s);
-  Or      (log2 eitherI ex q s);
-  Not     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r RErr; Logical b (ex q (Push (Logical (flip b)) t)) }) });
-  Branch  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l RErr; Logical d (d |> { False (ex (cat f q) v); True (ex (cat r q) v) }) }) }); Logical d RErr }) }); Logical d RErr }) });
-  Ifte    (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l (ex (cat l (Then (Choose (Push (Quot f) (Push (Quot r) v))) q)) v); Logical d RErr }) }); Logical d RErr }) }); Logical d RErr }) });
-  Choose w (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot l RErr; Logical d (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (d |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr }) }); Logical e RErr }) }) }) }) }
+  Branch  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l RErr; Logical d (d |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Sym y RErr }) }); Logical d RErr; Sym y RErr }) }); Logical d RErr; Sym y RErr }) });
+  Ifte    (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l (ex (cat l (Then (Choose (Push (Quot f) (Push (Quot r) v))) q)) v); Logical d RErr; Sym y RErr }) }); Logical d RErr; Sym y RErr }) }); Logical d RErr; Sym y RErr }) });
+  Uncons  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (r |> { Done RErr; Then x p (ex q (Push (Quot p) (Push (itemOf x) t))) }); Logical c RErr; Sym y RErr }) });
+  Null    (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Logical (zero n)) t)); Quot r (ex q (Push (Logical (r |> { Done True; Then x p False })) t)); Logical c RErr; Sym y RErr }) });
+  Small   (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Logical (upToOne n)) t)); Quot r (ex q (Push (Logical (r |> { Done True; Then x p (p |> { Done True; Then x o False }) })) t)); Logical c RErr; Sym y RErr }) });
+  Choose w (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot l RErr; Logical d (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (d |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr }) }); Logical e RErr; Sym g RErr }) }); Sym g RErr }) }) }
 
 -- The same loop without fuel, for level 1: there the interpreter's
 -- fuel bounds the run, so the object program needs none of its own.

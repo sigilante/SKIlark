@@ -28,7 +28,7 @@ from . import joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 #: the directory holding the ``.ski`` sources
 DIR = pathlib.Path(__file__).parent / "programs"
@@ -78,6 +78,13 @@ class Run:
                 word = (w, self.prog(wf[0]))
         return [word] + self.prog(fields[1])
 
+    def symbol(self, term) -> str:
+        """A symbol by its word's constructor name: interpreted, the word
+        itself; compiled, the symbol ``Y<word>``."""
+        if self.mode == "compiled":
+            return peel(term, self.t["sym"], max_steps=STEPS)[0][1:]
+        return peel(term, self.t["word"], max_steps=STEPS)[0]
+
     def number(self, term) -> int:
         """A numeral: a natural, or where the program's numbers are integers
         (``Pos m`` is m, ``Neg m`` is -(m+1)), an integer."""
@@ -103,6 +110,8 @@ class Run:
             elif kind == "Logical":
                 b, _ = peel(payload[0], self.t["logical"], max_steps=STEPS)
                 items.append(b == "True")
+            elif kind == "Sym":
+                items.append(("Sym", self.symbol(payload[0])))
             elif self.mode == "compiled":
                 items.append(self.quot(payload[0]))
             else:
@@ -133,7 +142,7 @@ class Run:
 
 #: the level-1 reader's spellings of the outcomes (joy.LEVEL1_READER)
 _ATOM_OUTCOMES = {"K": "Yes", "K I": "No", "S S": "OEmpty", "S K K": "OQuot",
-                  "S S K": "OLogical", "S K": "RErr", "S I": "RTime"}
+                  "S S K": "OLogical", "S S I": "OSym", "S K": "RErr", "S I": "RTime"}
 
 
 def _read_atoms(term) -> Outcome:

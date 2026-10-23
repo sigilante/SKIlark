@@ -1,5 +1,5 @@
 """Phase 2: the same Joy programs through the front end in its three
-forms.  The counts are the kernel's with Joy's stages 1, 1b and 2
+forms.  The counts are the kernel's with Joy's stages 1 to 3
 (PLAN.md §3): ``sumto`` is written with ``ifte`` and ``pred``, so this
 set compiles with integers and truth values; all measured on skijack
 0.2.1.
@@ -23,14 +23,14 @@ PROGRAMS = {
 
 #: outcome, then host contractions unfuelled (uP) and fuelled (rP)
 INTERPRETED = {
-    "p1": (("RVal", [6]), 3_875, 3_864),
-    "p2": (("RVal", [6]), 3_759, 3_748),
-    "p3": (("RVal", [1, 2, 1]), 4_880, 4_852),
-    "p4": (("RVal", [1, 3]), 6_238, 6_185),
-    "p5": (("RVal", [[("Lit", 1), ("Lit", 2)]]), 2_734, 2_730),
-    "p6": (("RErr", None), 581, 595),
-    "p7": (("RVal", [6]), 69_325, 65_788),
-    "p8": (("RVal", [15]), 106_248, 98_539),
+    "p1": (("RVal", [6]), 3_643, 3_632),
+    "p2": (("RVal", [6]), 3_466, 3_455),
+    "p3": (("RVal", [1, 2, 1]), 4_343, 4_315),
+    "p4": (("RVal", [1, 3]), 5_554, 5_501),
+    "p5": (("RVal", [[("Lit", 1), ("Lit", 2)]]), 2_435, 2_431),
+    "p6": (("RErr", None), 505, 519),
+    "p7": (("RVal", [6]), 68_678, 64_883),
+    "p8": (("RVal", [15]), 107_175, 98_831),
 }
 COMPILED = {
     "p1": (("RVal", [6]), 668, 668),
@@ -39,8 +39,8 @@ COMPILED = {
     "p4": (("RVal", [1, 3]), 872, 900),
     "p5": (("RVal", [("quot", ("RVal", [1, 2]))]), 273, 273),
     "p6": (("RErr", None), 8, 8),
-    "p7": (("RVal", [6]), 15_794, 15_395),
-    "p8": (("RVal", [15]), 24_328, 23_429),
+    "p7": (("RVal", [6]), 17_423, 17_024),
+    "p8": (("RVal", [15]), 27_933, 27_034),
 }
 
 
@@ -79,7 +79,7 @@ def test_a_kept_name_survives_as_itself():
 
 def test_interpreted_kernel_sizes(interp):
     s = interp.e.sizes
-    assert (s["exec"], s["execU"], s["step"]) == (11_521, 11_525, 11_461)
+    assert (s["exec"], s["execU"], s["step"]) == (16_172, 16_176, 16_112)
 
 
 @pytest.mark.parametrize("name", sorted(PROGRAMS))
@@ -93,7 +93,7 @@ def test_interpreted_outcomes_and_counts(interp, name):
 
 def test_compiled_kernel_sizes(comp):
     s = comp.e.sizes
-    assert (s["apply"], s["applyU"], s["seq"]) == (4_946, 4_950, 42)
+    assert (s["apply"], s["applyU"], s["seq"]) == (5_567, 5_571, 42)
     # every static quotation is one constructor of quot with one body;
     # the three runtime constructors are what cons, unit and cat build
     static = sorted(k for k in s if k[0] == "Q" and k[1:].isdigit())

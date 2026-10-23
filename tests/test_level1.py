@@ -3,7 +3,7 @@
 minutes on the reference reducer, so they are ``slow`` (``--runslow``);
 their numbers are recorded in PLAN.md.  The compiled ones were measured
 on skijack 0.2.0 and hold on 0.2.1; the interpreted ones are the kernel's
-with Joy's stages 1, 1b and 2, measured on 0.2.1, where Avon runs them in
+with Joy's stages 1 to 3, measured on 0.2.1, where Avon runs them in
 under a minute (``SKIJACK_REDUCER=avon``).  The fast tests below check the generated source and the reader.
 """
 
@@ -16,10 +16,10 @@ from skilark.joy import DEFINITIONS
 DEFS = dict(DEFINITIONS, sq="dup +")
 
 #: host contractions, measured once (PLAN.md section 1c)
-LEVEL1_IQ, LEVEL1_IP = (26_021_115, 26_060_992), (27_015_891, 27_056_776)
+LEVEL1_IQ, LEVEL1_IP = (22_801_690, 22_840_006), (23_762_440, 23_801_764)
 LEVEL1_CQ, LEVEL1_CP = (2_328_665, 2_342_964), (2_337_648, 2_351_954)
-READER_YES, READER_NO, READER_TQ, READER_TE, READER_TERR = 263_177, 270_784, 86_545, 33_204, 14_794
-READER_TL, READER_NEG = 84_881, 106_379
+READER_YES, READER_NO, READER_TQ, READER_TE, READER_TERR = 277_007, 284_677, 98_557, 33_204, 14_794
+READER_TL, READER_NEG, READER_SYM = 96_546, 118_916, 94_868
 
 #: (form, program, fuel) -> (outcome, host contractions)
 MEASURED = {
@@ -65,6 +65,7 @@ dict := ns{}
 yes  := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Num (Pos (Suc (Suc Zero)))) Empty))>@400
 no   := wfN dict |- <topIs (Suc (Suc (Suc Zero))) (RVal (Push (Num (Pos (Suc (Suc Zero)))) Empty))>@400
 neg  := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Num (Neg (Suc Zero))) Empty))>@400
+sym  := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Sym Dup) Empty))>@400
 tq   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Quot Done) Empty))>@400
 te   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal Empty)>@400
 terr := wfN dict |- <topIs (Suc (Suc Zero)) RErr>@400
@@ -84,6 +85,7 @@ def test_the_level_1_answer_is_a_combinator_applied_to_atoms():
     assert r.run("terr", 20_000_000) == (("RErr", None), READER_TERR)
     assert r.run("tl", 20_000_000) == (("OLogical", None), READER_TL)
     assert r.run("neg", 20_000_000) == (("No", None), READER_NEG)
+    assert r.run("sym", 20_000_000) == (("OSym", None), READER_SYM)
 
 
 # ---------------------------------------------------- the runs, measured

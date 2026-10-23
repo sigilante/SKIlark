@@ -9,10 +9,12 @@ namespace.
 
 - `skilark/programs/kernel.ascii.ski` — the kernel: Joy's basis `dup swap
   pop cons cat unit dip i` plus literals, quotations and `+`, and Joy's
-  next words: `- * / rem succ pred max min = <` on signed, unbounded
-  integers (`neg abs sign` derived), the truth values `true false` with
-  `and or not`, `branch` and `ifte` (`> <= >= != xor` derived); run by a
-  fold over the program (`exec`, one unit of fuel per word, the fuel a
+  next words: `- * / rem = <` on signed, unbounded integers, the truth
+  values `true false` with `branch` and `ifte`, and quotations as lists,
+  `uncons null small`, a word in one a symbol (`[dup +] first` is `dup`).
+  `succ pred max min neg abs sign not and or > <= >= != xor first rest
+  swons unswons concat size at of take drop` are derived; run by a fold
+  over the program (`exec`, one unit of fuel per word, the fuel a
   Church numeral; `execU`, no fuel). SKIlark grows toward Joy in full, in
   stages (`PLAN.md` §3). `basis.ascii.ski` is the basis alone, with
   SKIlark's own `ifz`, as phase 3 measured it.
@@ -46,12 +48,13 @@ python -m skilark "3 [dup +] i"
 python -m skilark --define "sq == dup +" "1 2 + sq"
 python -m skilark "5 fact"                # by ifte and Kerby's y
 python -m skilark "-7 2 / -7 2 rem"       # -3 -1, as C truncates
+python -m skilark "[1 2 3 4] 2 take size" # 2
 ```
 
 ```
 $ python -m skilark "3 [dup +] i"
-interpreted  unfuelled      3,759  6
-interpreted  fuelled        3,748  6
+interpreted  unfuelled      3,466  6
+interpreted  fuelled        3,455  6
 compiled     unfuelled        428  6
 compiled     fuelled          442  6
 ```
@@ -78,5 +81,5 @@ which SKIlark requires.
 >>> Joy().run("r7")                                   # 3 sumto, by Kerby's y
 (('RVal', [6]), 29641)
 >>> compiled({"p": "5 sumto"}).run("up")
-(('RVal', [15]), 21678)
+(('RVal', [15]), 25283)
 ```
