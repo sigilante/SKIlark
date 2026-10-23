@@ -2,44 +2,73 @@
 -- This file is the kernel alone; skilark.joy appends generated programs.
 -- It grows toward Joy in full; basis.ascii.ski keeps the basis alone, as
 -- phase 3 measured it.  The words are Joy's (von Thun) and the basis follows
--- Kerby; `Do` is Joy's `i`, since `I` is reserved for the combinator, and
--- `Ifz` is the Scott eliminator of nat, which Joy has not.
+-- Kerby; `Do` is Joy's `i`, since `I` is reserved for the combinator.
 -- `Qcons` is Joy's `cons`: `Cons` names the path constructor by SKIjack's
 -- rule (SPEC section 8) and constructor names are global.
 -- Quotations are data: `Quot` holds a program, not a function, so every
 -- field is first-order and `Do` is a splice.  Derived words are equations
 -- whose values are programs: the program's own names are its dictionary.
--- Numbers are naturals: `pred` of 0 is an error until integers are signed.
+-- Integers are signed and unbounded, a sign and a unary magnitude: `Pos m`
+-- is m and `Neg m` is -(m+1), so zero is only `Pos Zero`.
 nat     === Zero | Suc nat
+int     === Pos nat | Neg nat
 logical === False | True
-item    === Num nat | Quot prog | Logical logical
+item    === Num int | Quot prog | Logical logical
 stack   === Empty | Push item stack
-word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Ifz | Lit nat | Quote prog | Add | Mul | Succ | Pred | Max | Min | Eql | Lt | Truth logical | And | Or | Not | Branch | Ifte | Choose stack prog prog
+word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit int | Quote prog | Add | Sub | Mul | Div | Rem | Succ | Pred | Max | Min | Eql | Lt | Truth logical | And | Or | Not | Branch | Ifte | Choose stack
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
 
+-- naturals
 add m n = n |> { Zero m; Suc k (Suc (add m k)) }
 mul m n = n |> { Zero Zero; Suc k (add m (mul m k)) }
 less m n = n |> { Zero False; Suc j (m |> { Zero True; Suc i (less i j) }) }
 same m n = m |> { Zero (n |> { Zero True; Suc j False }); Suc i (n |> { Zero False; Suc j (same i j) }) }
+monus m n = n |> { Zero m; Suc j (m |> { Zero Zero; Suc i (monus i j) }) }
+divN m n = less m n |> { False (Suc (divN (monus m n) n)); True Zero }
+remN m n = less m n |> { False (remN (monus m n) n); True m }
+-- truth values
 both a b = a |> { False False; True b }
 either a b = a |> { False b; True True }
-negate a = a |> { False True; True False }
-iff a b = a |> { False (negate b); True b }
+flip a = a |> { False True; True False }
+iff a b = a |> { False (flip b); True b }
+-- integers: m - n of naturals, -k, the magnitude, the sign as a truth value
+negN k = k |> { Zero (Pos Zero); Suc j (Neg j) }
+diff m n = m |> { Zero (negN n); Suc i (n |> { Zero (Pos m); Suc j (diff i j) }) }
+mag z = z |> { Pos m m; Neg m (Suc m) }
+isNeg z = z |> { Pos m False; Neg m True }
+signed s k = s |> { False (Pos k); True (negN k) }
+plus a b = a |> { Pos m (b |> { Pos n (Pos (add m n)); Neg n (diff m (Suc n)) }); Neg m (b |> { Pos n (diff n (Suc m)); Neg n (Neg (Suc (add m n))) }) }
+minus z = z |> { Pos m (negN m); Neg m (Pos (Suc m)) }
+times a b = signed (iff (isNeg a) (flip (isNeg b))) (mul (mag a) (mag b))
+-- division truncates toward zero and the remainder takes the dividend's sign
+divide a b = signed (iff (isNeg a) (flip (isNeg b))) (divN (mag a) (mag b))
+modulo a b = signed (isNeg a) (remN (mag a) (mag b))
+lessZ a b = a |> { Pos m (b |> { Pos n (less m n); Neg n False }); Neg m (b |> { Pos n True; Neg n (less n m) }) }
+sameZ a b = a |> { Pos m (b |> { Pos n (same m n); Neg n False }); Neg m (b |> { Pos n False; Neg n (same m n) }) }
+succZ z = z |> { Pos m (Pos (Suc m)); Neg m (negN m) }
+predZ z = z |> { Pos m (m |> { Zero (Neg Zero); Suc k (Pos k) }); Neg m (Neg (Suc m)) }
 cat p q = p |> { Done q; Then w r (Then w (cat r q)) }
 -- the word that pushes an item back: cons, unit and dip re-quote a datum
 wordOf a = a |> { Num n (Lit n); Quot r (Quote r); Logical b (Truth b) }
 
--- the arithmetic and logical words' results, x below y on the stack
-mulI n m = Num (mul n m)
-succI n = Num (Suc n)
-maxI n m = Num (less n m |> { False n; True m })
-minI n m = Num (less n m |> { False m; True n })
-lessI n m = Logical (less n m)
+-- the words' results, x below y on the stack
+addI n m = Num (plus n m)
+subI n m = Num (plus n (minus m))
+mulI n m = Num (times n m)
+divI n m = Num (divide n m)
+remI n m = Num (modulo n m)
+maxI n m = Num (lessZ n m |> { False n; True m })
+minI n m = Num (lessZ n m |> { False m; True n })
+succI n = Num (succZ n)
+predI n = Num (predZ n)
+lessI n m = Logical (lessZ n m)
 bothI b c = Logical (both b c)
 eitherI b c = Logical (either b c)
--- a word of two numbers, of one, of two truth values, of one
+-- a word of two numbers, of two with a nonzero divisor, of one, of two
+-- truth values
 num2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (f n m) u)); Quot r RErr; Logical c RErr }); Quot r RErr; Logical c RErr }) }) }
+div2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (mag m |> { Zero RErr; Suc k (ex q (Push (f n m) u)) }); Quot r RErr; Logical c RErr }); Quot r RErr; Logical c RErr }) }) }
 num1 f ex q s = s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (f n) t)); Quot r RErr; Logical c RErr }) }
 log2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m RErr; Quot r RErr; Logical d (b |> { Num n RErr; Quot r RErr; Logical c (ex q (Push (f c d) u)) }) }) }) }
 
@@ -51,7 +80,8 @@ exec f p s = f loop timeout p s
 loop ex p s = p |> { Done (RVal s); Then w q (step ex w q s) }
 timeout p s = RTime
 -- ifte runs its test on the stack, then Choose takes the truth value it
--- left, restores the stack and splices the branch it picks
+-- left and, from the stack it saved with the two branches on top,
+-- restores the stack and splices the branch it picks
 step ex w q s = w |> {
   Dup     (s |> { Empty RErr; Push a t (ex q (Push a (Push a t))) });
   Swap    (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push b (Push a u))) }) });
@@ -61,33 +91,31 @@ step ex w q s = w |> {
   Unit    (s |> { Empty RErr; Push a t (ex q (Push (Quot (Then (wordOf a) Done)) t)) });
   Dip     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex (cat r (Then (wordOf b) q)) u) }); Logical c RErr }) });
   Do      (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex (cat r q) t); Logical c RErr }) });
-  Ifz     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot sc (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot z (u |> { Empty RErr; Push c v (c |> { Num n (n |> { Zero (ex (cat z q) v); Suc m (ex (cat sc q) (Push (Num m) v)) }); Quot r RErr; Logical d RErr }) }); Logical d RErr }) }); Logical d RErr }) });
   Lit n   (ex q (Push (Num n) s));
   Quote r (ex q (Push (Quot r) s));
-  Add     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (Num (add m n)) u)); Quot r RErr; Logical c RErr }); Quot r RErr; Logical c RErr }) }) });
+  Add     (num2 addI ex q s);
+  Sub     (num2 subI ex q s);
   Mul     (num2 mulI ex q s);
+  Div     (div2 divI ex q s);
+  Rem     (div2 remI ex q s);
   Succ    (num1 succI ex q s);
-  Pred    (s |> { Empty RErr; Push a t (a |> { Num n (n |> { Zero RErr; Suc m (ex q (Push (Num m) t)) }); Quot r RErr; Logical c RErr }) });
+  Pred    (num1 predI ex q s);
   Max     (num2 maxI ex q s);
   Min     (num2 minI ex q s);
-  Eql     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (Logical (same n m)) u)); Quot r RErr; Logical c RErr }); Quot r RErr; Logical d (b |> { Num n RErr; Quot r RErr; Logical c (ex q (Push (Logical (iff c d)) u)) }) }) }) });
+  Eql     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (Logical (sameZ n m)) u)); Quot r RErr; Logical c RErr }); Quot r RErr; Logical d (b |> { Num n RErr; Quot r RErr; Logical c (ex q (Push (Logical (iff c d)) u)) }) }) }) });
   Lt      (num2 lessI ex q s);
   Truth b (ex q (Push (Logical b) s));
   And     (log2 bothI ex q s);
   Or      (log2 eitherI ex q s);
-  Not     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r RErr; Logical b (ex q (Push (Logical (negate b)) t)) }) });
-  Branch  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l RErr; Logical d (d |> { True (ex (cat r q) v); False (ex (cat f q) v) }) }) }); Logical d RErr }) }); Logical d RErr }) });
-  Ifte    (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l (ex (cat l (Then (Choose v r f) q)) v); Logical d RErr }) }); Logical d RErr }) }); Logical d RErr }) });
-  Choose v r f (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot l RErr; Logical d (d |> { True (ex (cat r q) v); False (ex (cat f q) v) }) }) }) }
+  Not     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r RErr; Logical b (ex q (Push (Logical (flip b)) t)) }) });
+  Branch  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l RErr; Logical d (d |> { False (ex (cat f q) v); True (ex (cat r q) v) }) }) }); Logical d RErr }) }); Logical d RErr }) });
+  Ifte    (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l (ex (cat l (Then (Choose (Push (Quot f) (Push (Quot r) v))) q)) v); Logical d RErr }) }); Logical d RErr }) }); Logical d RErr }) });
+  Choose w (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot l RErr; Logical d (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (d |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr }) }); Logical e RErr }) }) }) }) }
 
 -- The same loop without fuel, for level 1: there the interpreter's
 -- fuel bounds the run, so the object program needs none of its own.
 execU p s = p |> { Done (RVal s); Then w q (step execU w q s) }
 
-one   := Suc Zero
-two   := Suc one
-three := Suc two
-five  := add two three
 -- fuel: Church numerals, f applied n times; fuel is 200
 ten f x    = f (f (f (f (f (f (f (f (f (f x)))))))))
 twenty f x = ten f (ten f x)

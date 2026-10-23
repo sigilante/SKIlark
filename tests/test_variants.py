@@ -9,7 +9,7 @@ import pytest
 
 from skilark import Run
 from skilark import variants as V
-from skilark.joy import DEFINITIONS, _programs, datum, nat
+from skilark.joy import _programs, datum, nat
 from test_modes import COMPILED, INTERPRETED
 
 #: (loop, fuel) -> fuelled count per program, p1 .. p8.  The splice with
@@ -50,13 +50,9 @@ def test_every_loop_and_fuel_gives_the_kernels_outcomes(loop, fuel):
             assert u == UNFUELLED[loop][i], (p, u)
 
 
-def test_the_compiled_forms_church_fuel_is_the_compiled_form():
-    """The interpreted variants run the basis kernel, which the front end
-    has outgrown; the compiled form of these programs, which use no truth
-    value, is the front end's own."""
-    t = V.table(V.compiled("church"))
-    assert {p: (o, n) for p, (o, n, u) in t.items()} == \
-        {p: (o, n) for p, (o, u, n) in COMPILED.items()}
+#: the compiled form's unfuelled count per program, as phase 3 ran it:
+#: naturals, sumto by ifz, no truth value
+COMPILED_UNFUELLED = (493, 536, 626, 820, 264, 6, 11_847, 18_186)
 
 
 @pytest.mark.parametrize("fuel", list(COMPILED_FUELLED))
@@ -64,7 +60,7 @@ def test_the_compiled_forms_fuel(fuel):
     t = V.table(V.compiled(fuel))
     for i, p in enumerate(V.PROGRAMS):
         outcome, n, u = t[p]
-        assert (outcome, u) == (COMPILED[p][0], COMPILED[p][1]), p
+        assert (outcome, u) == (COMPILED[p][0], COMPILED_UNFUELLED[i]), p
         assert n == COMPILED_FUELLED[fuel][i], (p, n)
 
 
@@ -75,8 +71,8 @@ def test_church_fuel_times_out_where_scott_fuel_does():
     ns = (5, 6, 65, 66)
     src = [V.BASIS, V.SCOTT]
     src += [V.church(n) + f"f{n} := {nat(n)}\n" for n in ns]
-    for name, prog in _programs(progs, DEFINITIONS).items():
-        src.append(f"p{name} := {datum(prog)}\n")
+    for name, prog in _programs(progs, V.BASIS_DEFS).items():
+        src.append(f"p{name} := {datum(prog, basis=True)}\n")
         for n in ns:
             src.append(f"s{name}x{n} := execS f{n} p{name} Empty\n")
             src.append(f"c{name}x{n} := exec c{n} p{name} Empty\n")

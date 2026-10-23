@@ -64,6 +64,10 @@ FUEL = 200
 
 #: the basis kernel, which every interpreted variant replaces a piece of
 BASIS = (joy.DIR / "basis.ascii.ski").read_text(encoding="utf-8")
+
+#: the definitions as phase 3 ran them: ``sumto`` by ``ifz``, which the
+#: basis has and the kernel has since retired
+BASIS_DEFS = dict(DEFINITIONS, sumto="[swap [pop 0] [dup [swap i] dip 1 + +] ifz] y")
 _K = BASIS
 _STEP = _K[_K.index("step ex w q s = "):_K.index("-- The same loop without fuel")]
 
@@ -147,8 +151,8 @@ def interpreted(loop: str, fuel: str, programs: Dict[str, str] = PROGRAMS) -> Ru
     ``uP`` the unfuelled run."""
     extra, fuelled, unfuelled = INTERPRETED[(loop, fuel)]
     out = [_K, extra, "\n-- programs, from skilark.variants\n"]
-    for name, prog in _programs(programs, DEFINITIONS).items():
-        out.append(f"p{name} := {datum(prog)}\n")
+    for name, prog in _programs(programs, BASIS_DEFS).items():
+        out.append(f"p{name} := {datum(prog, basis=True)}\n")
         out.append(f"r{name} := {fuelled.format(p='p' + name)}\n")
         if unfuelled:
             out.append(f"u{name} := {unfuelled.format(p='p' + name)}\n")
@@ -160,7 +164,7 @@ def compiled(fuel: str, programs: Dict[str, str] = PROGRAMS) -> Run:
     ``uP`` unfuelled, as ``skilark.compiled`` declares them.  ``church``
     is the compiled form itself; the Scott fuels run ``applyS``, the
     eliminator as it was before Church fuel."""
-    src = joy.compiled(programs)
+    src = joy.compiled(programs, BASIS_DEFS)
     if fuel == "church":
         return Run(src, "compiled")
     if fuel not in ("computed", "literal"):
