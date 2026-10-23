@@ -1,6 +1,6 @@
 """Phase 2: the same Joy programs through the front end in its three
-forms.  Every number here was measured on skijack 0.2.0, and holds on
-0.2.1.
+forms.  The unfuelled counts were measured on skijack 0.2.0 and hold on
+0.2.1; the fuelled counts are Church fuel's, measured on 0.2.1.
 """
 
 import pytest
@@ -21,24 +21,24 @@ PROGRAMS = {
 
 #: outcome, then host contractions unfuelled (uP) and fuelled (rP)
 INTERPRETED = {
-    "p1": (("RVal", [6]), 2_014, 9_276),
-    "p2": (("RVal", [6]), 2_029, 9_291),
-    "p3": (("RVal", [1, 2, 1]), 2_589, 11_601),
-    "p4": (("RVal", [1, 3]), 3_250, 14_030),
-    "p5": (("RVal", [[("Lit", 1), ("Lit", 2)]]), 1_429, 7_820),
-    "p6": (("RErr", None), 276, 3_385),
-    "p7": (("RVal", [6]), 31_890, 110_770),
-    "p8": (("RVal", [15]), 49_568, 173_744),
+    "p1": (("RVal", [6]), 2_014, 2_003),
+    "p2": (("RVal", [6]), 2_029, 2_018),
+    "p3": (("RVal", [1, 2, 1]), 2_589, 2_561),
+    "p4": (("RVal", [1, 3]), 3_250, 3_197),
+    "p5": (("RVal", [[("Lit", 1), ("Lit", 2)]]), 1_429, 1_425),
+    "p6": (("RErr", None), 276, 290),
+    "p7": (("RVal", [6]), 31_890, 29_641),
+    "p8": (("RVal", [15]), 49_568, 44_647),
 }
 COMPILED = {
     "p1": (("RVal", [6]), 493, 493),
-    "p2": (("RVal", [6]), 536, 3_164),
-    "p3": (("RVal", [1, 2, 1]), 626, 3_254),
-    "p4": (("RVal", [1, 3]), 820, 6_074),
+    "p2": (("RVal", [6]), 536, 550),
+    "p3": (("RVal", [1, 2, 1]), 626, 640),
+    "p4": (("RVal", [1, 3]), 820, 848),
     "p5": (("RVal", [("quot", ("RVal", [1, 2]))]), 264, 264),
     "p6": (("RErr", None), 6, 6),
-    "p7": (("RVal", [6]), 11_847, 40_594),
-    "p8": (("RVal", [15]), 18_186, 63_921),
+    "p7": (("RVal", [6]), 11_847, 11_508),
+    "p8": (("RVal", [15]), 18_186, 17_413),
 }
 
 
@@ -77,7 +77,7 @@ def test_a_kept_name_survives_as_itself():
 
 def test_interpreted_kernel_sizes(interp):
     s = interp.e.sizes
-    assert (s["exec"], s["execU"], s["step"]) == (2_538, 2_492, 2_428)
+    assert (s["exec"], s["execU"], s["step"]) == (2_488, 2_492, 2_428)
 
 
 @pytest.mark.parametrize("name", sorted(PROGRAMS))
@@ -91,7 +91,7 @@ def test_interpreted_outcomes_and_counts(interp, name):
 
 def test_compiled_kernel_sizes(comp):
     s = comp.e.sizes
-    assert (s["apply"], s["applyU"], s["seq"]) == (3_366, 3_078, 42)
+    assert (s["apply"], s["applyU"], s["seq"]) == (3_074, 3_078, 42)
     # every static quotation is one constructor of quot with one body;
     # the three runtime constructors are what cons, unit and cat build
     static = sorted(k for k in s if k[0] == "Q" and k[1:].isdigit())

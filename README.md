@@ -9,7 +9,8 @@ namespace.
 
 - `skilark/programs/kernel.ascii.ski` — the kernel: Joy's basis `dup swap
   pop cons cat unit dip i` plus `ifz`, literals, quotations and `+`, run by
-  a fold over the program (`exec`, one unit of fuel per word; `execU`).
+  a fold over the program (`exec`, one unit of fuel per word, the fuel a
+  Church numeral; `execU`, no fuel).
 - `skilark/programs/joy.{ascii,unicode}.ski` — the kernel with a
   hand-written set of programs and Joy's laws (phase 1).
 - `skilark/joy.py` — the front end. Joy text to SKIjack source in three
@@ -29,8 +30,8 @@ namespace.
 - `skilark/variants.py` — phase 3's measurements: the kernel with its
   loop (the splice, a continuation stack, results sequenced) or its fuel
   (computed, literal, Church) replaced, on the phase-2 programs
-  (`python -m skilark.variants`). Church fuel cuts a fuelled run to a
-  quarter; the splice stays (`PLAN.md` §3).
+  (`python -m skilark.variants`). Church fuel cut a fuelled run to a
+  quarter and is now the kernel's; the splice stays (`PLAN.md` §3).
 - `PLAN.md` — what is built, what was measured, and what comes next.
 
 ```
@@ -43,9 +44,9 @@ python -m skilark --define "sq == dup +" "1 2 + sq"
 ```
 $ python -m skilark "3 [dup +] i"
 interpreted  unfuelled      2,029  6
-interpreted  fuelled        9,291  6
+interpreted  fuelled        2,018  6
 compiled     unfuelled        428  6
-compiled     fuelled        2,993  6
+compiled     fuelled          442  6
 ```
 
 Every reduction runs through SKIjack, by default in Python on
@@ -68,7 +69,7 @@ which SKIlark requires.
 ```python
 >>> from skilark import Joy, compiled
 >>> Joy().run("r7")                                   # 3 sumto, by Kerby's y
-(('RVal', [6]), 110770)
+(('RVal', [6]), 29641)
 >>> compiled({"p": "5 sumto"}).run("up")
-(('RVal', [15]), 18186)
+(('RVal', [15]), 15836)
 ```
