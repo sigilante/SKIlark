@@ -516,7 +516,7 @@ treatment, and Joy's laws were argued on paper.
   puts the level-1 runs at minutes each on the reference reducer; they
   are measured, recorded and gated behind `--runslow`, not run on every
   push. On Avon (`SKIJACK_REDUCER=avon`) the whole suite, these runs
-  included, takes 45 s.
+  included, takes 48 s.
 - **The name.** SKIlark is a working name.
 
 ## 5. Acceptance
