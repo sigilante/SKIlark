@@ -4,13 +4,18 @@ The reference is Wodan58/Joy (github.com/Wodan58/Joy, fe9fa0f, 2026-03-31),
 the maintained descendant of von Thun's joy1.  Each builtin below follows
 its C source (``src/<name>.c`` and the macros of ``runtime.h``), cited by
 file; the comments say where the reference's checks fall.  It covers the
-types SKIlark has: integers, truth values, lists and symbols.  Floats,
-files, sets and the other words are not modelled.
+types SKIlark has: integers, truth values, characters, strings, lists and
+symbols.  Floats, files, sets and the other words are not modelled, and
+neither are two artefacts of the reference's C strings: a string ends at
+a character 0, and its characters above 127 read back negative where C's
+``char`` is signed.
 
 Values are tagged tuples:
 
     ("N", n)        an integer (the reference's are 64-bit; these are not)
     ("B", b)        a truth value
+    ("C", n)        a character, its code
+    ("T", (n, ..))  a string, its characters' codes
     ("L", (x, ..))  a list: a quotation is a list of its elements
     ("S", name)     a symbol: a word inside a quotation
 
@@ -30,20 +35,64 @@ class JoyError(Exception):
     """The reference's ``execerror``: the run stops with an error."""
 
 
+class Undefined(Exception):
+    """A run whose outcome the reference leaves to its C representation,
+    which the model does not follow."""
+
+
+#: scan.c ``special``: the escapes after a backslash
+ESCAPES = {"b": 8, "t": 9, "n": 10, "v": 11, "f": 12, "r": 13, '"': 34, "'": 39, "\\": 92}
+
+
+def _special(text: str, i: int) -> Tuple[int, int]:
+    """scan.c ``special``, at the character after a backslash: the code and
+    the index past the escape.  Up to three decimal digits are a code."""
+    c = text[i]
+    if c in ESCAPES:
+        return ESCAPES[c], i + 1
+    if c.isdigit():
+        j = i + 1
+        while j < len(text) and j < i + 3 and text[j].isdigit():
+            j += 1
+        return int(text[i:j]), j
+    return ord(c), i + 1
+
+
 def parse(text: str) -> list:
-    """Joy text as tokens: integers, names and nested lists."""
-    toks = text.replace("[", " [ ").replace("]", " ] ").split()
+    """Joy text as tokens, as scan.c reads it: integers, names, nested
+    lists, ``("C", n)`` for ``'c`` and ``("T", codes)`` for ``"..."``."""
     out: list = [[]]
-    for t in toks:
-        if t == "[":
-            out.append([])
-        elif t == "]":
-            q = out.pop()
-            out[-1].append(q)
-        elif t.lstrip("-").isdigit() and t != "-":
-            out[-1].append(int(t))
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if c.isspace():
+            i += 1
+        elif c == "[":
+            out.append([]); i += 1
+        elif c == "]":
+            q = out.pop(); out[-1].append(q); i += 1
+        elif c == "'":
+            if text[i + 1] == "\\":
+                code, i = _special(text, i + 2)
+            else:
+                code, i = ord(text[i + 1]), i + 2
+            out[-1].append(("C", code))
+        elif c == '"':
+            i += 1
+            codes = []
+            while text[i] != '"':
+                if text[i] == "\\":
+                    code, i = _special(text, i + 1)
+                else:
+                    code, i = ord(text[i]), i + 1
+                codes.append(code)
+            out[-1].append(("T", tuple(codes))); i += 1
         else:
-            out[-1].append(t)
+            j = i
+            while j < len(text) and not text[j].isspace() and text[j] not in "[]":
+                j += 1
+            t = text[i:j]; i = j
+            out[-1].append(int(t) if t.lstrip("-").isdigit() and t != "-" else t)
     assert len(out) == 1, "unbalanced"
     return out[0]
 
@@ -54,6 +103,8 @@ def literal(t) -> Value:
     other name a symbol."""
     if isinstance(t, int):
         return ("N", t)
+    if isinstance(t, tuple):
+        return t
     if isinstance(t, list):
         return ("L", tuple(literal(u) for u in t))
     if t in ("true", "false"):
@@ -64,22 +115,27 @@ def literal(t) -> Value:
 # ------------------------------------------------------------------ helpers
 
 def num(v: Value) -> int:
-    """``nodevalue(...).num`` of a truth value or integer."""
+    """``nodevalue(...).num`` of a truth value, character or integer."""
     return int(v[1])
 
 
 def numeric(v: Value) -> bool:
     """``NUMERICTYPE``: an integer, character or truth value."""
-    return v[0] in ("N", "B")
+    return v[0] in ("N", "B", "C")
 
 
 def is_null(v: Value) -> bool:
     """compare.h ``is_null``."""
-    if v[0] in ("N", "B"):
+    if numeric(v):
         return num(v) == 0
-    if v[0] == "L":
+    if v[0] in ("L", "T"):
         return not v[1]
     return False                                    # USR_, ANON_FUNCT_
+
+
+def name(v: Value):
+    """A symbol's or a string's characters, as strcmp reads them."""
+    return tuple(ord(c) for c in v[1]) if v[0] == "S" else v[1]
 
 
 def compare(a: Value, b: Value) -> int:
@@ -87,12 +143,13 @@ def compare(a: Value, b: Value) -> int:
     not order."""
     if is_null(a) and is_null(b):
         return 0
-    if a[0] == "S":
-        if b[0] == "S":
-            return (a[1] > b[1]) - (a[1] < b[1])
+    if a[0] in ("S", "T"):
+        if b[0] in ("S", "T"):                      # strcmp on the names
+            x, y = name(a), name(b)
+            return (x > y) - (x < y)
         return 1
-    if a[0] in ("N", "B"):
-        if b[0] in ("N", "B"):
+    if numeric(a):
+        if numeric(b):
             return (num(a) > num(b)) - (num(a) < num(b))
         return 1
     return 1                                        # LIST_
@@ -100,9 +157,9 @@ def compare(a: Value, b: Value) -> int:
 
 def truth(v: Value) -> bool:
     """boolean.h ``get_boolean``."""
-    if v[0] in ("N", "B"):
+    if numeric(v):
         return num(v) != 0
-    if v[0] == "L":
+    if v[0] in ("L", "T"):
         return bool(v[1])
     return True                                     # USR_, ANON_FUNCT_
 
@@ -225,43 +282,58 @@ class Joy:
         lst = s.pop()[1]
         s[:] = list(reversed(lst))
 
-    # -- quotations and lists
+    # -- aggregates: lists and strings
+
+    @staticmethod
+    def aggregate(v: Value) -> None:
+        if v[0] not in ("L", "T"):
+            raise JoyError("aggregate")
+
+    @staticmethod
+    def members(v: Value) -> list:
+        """An aggregate's members: a string's are characters."""
+        return [("C", c) for c in v[1]] if v[0] == "T" else list(v[1])
+
+    @staticmethod
+    def build(kind: str, members: list) -> Value:
+        """An aggregate of ``kind`` from its members."""
+        if kind == "T":
+            return ("T", tuple(m[1] for m in members))
+        return ("L", tuple(members))
+
+    def consed(self, a: Value, x: Value) -> Value:
+        """cons_swons.h: a list takes any member, a string a character."""
+        self.aggregate(a)
+        if a[0] == "T" and x[0] != "C":
+            raise JoyError("character")
+        return self.build(a[0], [x] + self.members(a))
 
     def w_cons(self, s):                # cons.c: X A -> B
         self.params(s, 2)
-        if s[-1][0] != "L":
-            raise JoyError("aggregate")
-        a = s.pop(); x = s.pop(); s.append(("L", (x,) + a[1]))
+        a = s.pop(); x = s.pop(); s.append(self.consed(a, x))
 
     def w_swons(self, s):               # swons.c: A X -> B
         self.params(s, 2)
-        if s[-2][0] != "L":
-            raise JoyError("aggregate")
-        x = s.pop(); a = s.pop(); s.append(("L", (x,) + a[1]))
+        x = s.pop(); a = s.pop(); s.append(self.consed(a, x))
+
+    def nonempty(self, v: Value) -> list:
+        self.aggregate(v)
+        if not v[1]:
+            raise JoyError("non-empty aggregate")
+        return self.members(v)
 
     def w_first(self, s):               # first.c
         self.params(s, 1)
-        if s[-1][0] != "L":
-            raise JoyError("aggregate")
-        if not s[-1][1]:
-            raise JoyError("non-empty list")
-        s.append(s.pop()[1][0])
+        s.append(self.nonempty(s.pop())[0])
 
     def w_rest(self, s):                # rest.c
         self.params(s, 1)
-        if s[-1][0] != "L":
-            raise JoyError("aggregate")
-        if not s[-1][1]:
-            raise JoyError("non-empty list")
-        s.append(("L", s.pop()[1][1:]))
+        a = s.pop(); s.append(self.build(a[0], self.nonempty(a)[1:]))
 
     def w_uncons(self, s):              # uncons.c: A -> F R
         self.params(s, 1)
-        if s[-1][0] != "L":
-            raise JoyError("aggregate")
-        if not s[-1][1]:
-            raise JoyError("non-empty list")
-        a = s.pop()[1]; s.append(a[0]); s.append(("L", a[1:]))
+        a = s.pop(); m = self.nonempty(a)
+        s.append(m[0]); s.append(self.build(a[0], m[1:]))
 
     def w_unswons(self, s):             # unswons.c: A -> R F
         self.w_uncons(s); self.w_swap(s)
@@ -270,14 +342,12 @@ class Joy:
         self.params(s, 2)
         if s[-1][0] != s[-2][0]:
             raise JoyError("same types")
-        if s[-1][0] != "L":
-            raise JoyError("aggregate")
-        b = s.pop(); a = s.pop(); s.append(("L", a[1] + b[1]))
+        self.aggregate(s[-1])
+        b = s.pop(); a = s.pop(); s.append((a[0], a[1] + b[1]))
 
     def w_size(self, s):                # size.c
         self.params(s, 1)
-        if s[-1][0] != "L":
-            raise JoyError("aggregate")
+        self.aggregate(s[-1])
         s.append(("N", len(s.pop()[1])))
 
     def w_null(self, s):                # null.c: symbols are not null
@@ -286,9 +356,9 @@ class Joy:
     def w_small(self, s):               # small.c
         self.params(s, 1)
         v = s.pop()
-        if v[0] in ("N", "B"):
+        if numeric(v):
             s.append(("B", num(v) < 2))
-        elif v[0] == "L":
+        elif v[0] in ("L", "T"):
             s.append(("B", len(v[1]) < 2))
         else:
             raise JoyError("different type")
@@ -303,23 +373,20 @@ class Joy:
     def w_take(self, s):                # take.c: A N -> B
         self.params(s, 2)
         n = self.index(s.pop())
-        if s[-1][0] != "L":
-            raise JoyError("aggregate")
-        s.append(("L", s.pop()[1][:n]))
+        self.aggregate(s[-1])
+        a = s.pop(); s.append((a[0], a[1][:n]))
 
     def w_drop(self, s):                # drop.c: A N -> B
         self.params(s, 2)
         n = self.index(s.pop())
-        if s[-1][0] != "L":
-            raise JoyError("aggregate")
-        s.append(("L", s.pop()[1][n:]))
+        self.aggregate(s[-1])
+        a = s.pop(); s.append((a[0], a[1][n:]))
 
     def w_at(self, s):                  # at.c, of_at.h: A I -> X
         self.params(s, 2)
         i = self.index(s[-1])
-        if s[-2][0] != "L":
-            raise JoyError("aggregate")
-        a = s[-2][1]
+        self.aggregate(s[-2])
+        a = self.members(s[-2])
         if i >= len(a):
             raise JoyError("smaller index")
         s.pop(); s.pop(); s.append(a[i])
@@ -333,9 +400,9 @@ class Joy:
         self.params(s, 2)
         if s[-1][0] != "N":
             raise JoyError("integer")
-        if s[-2][0] != "N":                         # NUMERIC2: integer or char
+        if s[-2][0] not in ("N", "C"):              # NUMERIC2: integer or char
             raise JoyError("numeric second parameter")
-        b = s.pop(); a = s.pop(); s.append(("N", op(a[1], b[1])))
+        b = s.pop(); a = s.pop(); s.append((a[0], op(a[1], b[1])))
 
     def w_plus(self, s):
         self.plusminus(s, lambda a, b: a + b)
@@ -369,7 +436,7 @@ class Joy:
         self.params(s, 1)
         if not numeric(s[-1]):
             raise JoyError("numeric")
-        s.append(("N", num(s.pop()) + d))
+        v = s.pop(); s.append(("C" if v[0] == "C" else "N", num(v) + d))
 
     def w_succ(self, s):
         self.predsucc(s, 1)
@@ -383,8 +450,9 @@ class Joy:
             raise JoyError("same types")
         if not numeric(s[-1]):
             raise JoyError("numeric")
+        kind = "C" if s[-1][0] == "C" else "N"
         y = num(s.pop()); x = num(s.pop())
-        s.append(("N", x if take_second(y, x) else y))
+        s.append((kind, x if take_second(y, x) else y))
 
     def w_max(self, s):                 # max: top < second ? second : top
         self.maxmin(s, lambda y, x: y < x)
@@ -407,6 +475,33 @@ class Joy:
 
     def w_neg(self, s):
         s.append(("N", -self.integer1(s)))
+
+    def w_ord(self, s):                 # ord.c, ordchr.h
+        self.params(s, 1)
+        if not numeric(s[-1]):
+            raise JoyError("numeric")
+        s.append(("N", num(s.pop())))
+
+    def w_chr(self, s):                 # chr.c, ordchr.h
+        self.params(s, 1)
+        if not numeric(s[-1]):
+            raise JoyError("numeric")
+        s.append(("C", num(s.pop())))
+
+    def has(self, a: Value, x: Value) -> bool:
+        """inhas.h: a list by the comparison, a string by character code."""
+        self.aggregate(a)
+        if a[0] == "T":
+            return numeric(x) and num(x) in a[1]
+        return any(compare(m, x) == 0 for m in a[1])
+
+    def w_has(self, s):                 # has.c: A X -> B
+        self.params(s, 2)
+        x = s.pop(); a = s.pop(); s.append(("B", self.has(a, x)))
+
+    def w_in(self, s):                  # in.c: X A -> B
+        self.params(s, 2)
+        a = s.pop(); x = s.pop(); s.append(("B", self.has(a, x)))
 
     # -- comparison (comprel.h, comprel2.h; no sets here)
 
@@ -570,8 +665,8 @@ class Joy:
     def w_primrec(self, s):             # primrec.c: X [I] [C]
         self.params(s, 3); self.quotes(s, 2)
         c = s.pop(); i = s.pop(); x = s.pop()
-        if x[0] == "L":
-            members = list(x[1])
+        if x[0] in ("L", "T"):
+            members = self.members(x)
         elif x[0] == "N":
             members = [("N", k) for k in range(x[1], 0, -1)]
         else:
@@ -583,30 +678,30 @@ class Joy:
 
     def w_map(self, s):                 # map.c: A [P] -> B
         self.params(s, 2); self.quotes(s, 1)
-        if s[-2][0] != "L":
-            raise JoyError("aggregate")
+        self.aggregate(s[-2])
         p = s.pop(); a = s.pop(); out = []
-        for v in a[1]:
+        for v in self.members(a):
             c = s + [v]; self.exe(c, p[1])
             if not c:
                 raise JoyError("non-empty stack")
             out.append(c[-1])
-        s.append(("L", tuple(out)))
+        if a[0] == "T":                             # str[j++] = num, a C char
+            if not all(numeric(v) for v in out):
+                raise Undefined("map on a string to a non-number")
+            out = [("C", (num(v) + 128) % 256 - 128) for v in out]
+        s.append(self.build(a[0], out))
 
     def w_filter(self, s):              # filter.c: A [B] -> A1
         self.params(s, 2); self.quotes(s, 1)
-        if s[-2][0] != "L":
-            raise JoyError("aggregate")
+        self.aggregate(s[-2])
         p = s.pop(); a = s.pop()
-        out = tuple(v for v in a[1] if self.test(s + [v], p[1]))
-        s.append(("L", out))
+        s.append(self.build(a[0], [v for v in self.members(a) if self.test(s + [v], p[1])]))
 
     def w_step(self, s):                # step.c: A [P]
         self.params(s, 2); self.quotes(s, 1)
         p = s.pop(); a = s.pop()
-        if a[0] != "L":
-            raise JoyError("aggregate")
-        for v in a[1]:
+        self.aggregate(a)
+        for v in self.members(a):
             s.append(v); self.exe(s, p[1])
 
     def w_fold(self, s):                # fold.c: swapd step

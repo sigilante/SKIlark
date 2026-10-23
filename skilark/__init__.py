@@ -28,7 +28,7 @@ from . import joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 #: the directory holding the ``.ski`` sources
 DIR = pathlib.Path(__file__).parent / "programs"
@@ -76,6 +76,10 @@ class Run:
                 word = (w, peel(wf[0], self.t["logical"], max_steps=STEPS)[0] == "True")
             elif w == "Def":
                 word = (w, self.name(wf[0]))
+            elif w == "Glyph":
+                word = (w, self.number(wf[0]))
+            elif w == "Text":
+                word = (w, self.string(wf[0]))
             else:
                 word = (w, self.prog(wf[0]))
         return [word] + self.prog(fields[1])
@@ -93,6 +97,18 @@ class Run:
         """A ``Def``'s name, from its ``named`` field."""
         _, fields = peel(term, self.t["named"], max_steps=STEPS)
         return self.text(fields[0])
+
+    def string(self, term):
+        """A string's ``text``: its characters as a Python string, or as
+        their codes when one has no character."""
+        codes = []
+        ctor, fields = peel(term, self.t["text"], max_steps=STEPS)
+        while ctor == "TCons":
+            codes.append(self.number(fields[0]))
+            ctor, fields = peel(fields[1], self.t["text"], max_steps=STEPS)
+        if all(0 <= c < 0x110000 for c in codes):
+            return "".join(map(chr, codes))
+        return tuple(codes)
 
     def text(self, term) -> str:
         """A name's ``text`` as a string: a letter is its place in the
@@ -132,6 +148,10 @@ class Run:
                 items.append(b == "True")
             elif kind == "Sym":
                 items.append(("Sym", self.symbol(payload[0])))
+            elif kind == "Char":
+                items.append(("Char", self.number(payload[0])))
+            elif kind == "Str":
+                items.append(("Str", self.string(payload[0])))
             elif self.mode == "compiled":
                 items.append(self.quot(payload[0]))
             else:
@@ -162,7 +182,8 @@ class Run:
 
 #: the level-1 reader's spellings of the outcomes (joy.LEVEL1_READER)
 _ATOM_OUTCOMES = {"K": "Yes", "K I": "No", "S S": "OEmpty", "S K K": "OQuot",
-                  "S S K": "OLogical", "S S I": "OSym", "S K": "RErr", "S I": "RTime"}
+                  "S S K": "OLogical", "S S I": "OSym", "S K S": "OChar", "S S S": "OStr",
+                  "S K": "RErr", "S I": "RTime"}
 
 
 def _read_atoms(term) -> Outcome:

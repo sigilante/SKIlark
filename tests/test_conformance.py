@@ -13,15 +13,18 @@ import conform
 import joyref
 import test_combinators as C
 import test_modes as M
+import test_text as T
 import test_words as W
 from skilark import compiled, interpreted
 
 #: every program whose outcome some module pins: (module, name, text)
 PINNED = ([("words", n, p) for n, p in W.PROGRAMS.items()]
           + [("combinators", n, p) for n, p in C.PROGRAMS.items()]
+          + [("text", n, p) for n, p in T.PROGRAMS.items()]
           + [("modes", n, p) for n, p in M.PROGRAMS.items()])
 TABLES = {"words": (W.INTERPRETED, W.COMPILED),
           "combinators": (C.INTERPRETED, C.COMPILED),
+          "text": (T.INTERPRETED, T.COMPILED),
           "modes": (M.INTERPRETED, M.COMPILED)}
 
 
@@ -35,12 +38,11 @@ def test_the_pinned_outcome_is_the_references(module, name, text):
 
 #: where SKIlark and the reference part: program -> (the reference's
 #: outcome, SKIlark's in both forms as the interpreted form reads it, why).
-#: A derived word cannot see its argument's kind: Joy has a test for it
-#: (``logical``, ``integer``, ``list`` ...), which the kernel does not
-#: have yet; and a derived combinator checks a quotation when it runs it.
+#: A derived word cannot tell one kind of number from another (a truth
+#: value from an integer or a character): Joy has tests for them
+#: (``logical``, ``integer``, ``char``), which the kernel does not have;
+#: and a derived combinator checks a quotation when it runs it.
 DEVIATIONS = {
-    "[1] not": (("RErr", None), ("RVal", [False]),
-                "not takes a number or truth value; the derived not takes any value"),
     "true 5 and": (("RErr", None), ("RVal", [True]),
                    "and takes two values of one kind; the derived and cannot compare kinds"),
     "true 1 xor": (("RErr", None), ("RVal", [False]),
@@ -61,6 +63,12 @@ DEVIATIONS = {
         ("RVal", [("N", 1), ("N", 5)]), ("RVal", [1, 11]),
         "genrec hands R2 [[[B] [T] [R1] R2] #genrecaux], the reference's own word; "
         "the derived genrec hands it a quotation that recurses through y"),
+    '"ab" [ord] map': (("RVal", [("T", (97, 98))]), ("RErr", None),
+                       "map on a string keeps P's results as C chars, whatever their kind; "
+                       "the derived map conses each onto a string, which takes only characters"),
+    "'\\002 [0] [pop] primrec": (("RErr", None), ("RVal", [("Char", 2)]),
+                                 "primrec takes an integer or an aggregate; the derived primrec "
+                                 "counts a character down as it does an integer"),
 }
 
 

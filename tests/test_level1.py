@@ -3,7 +3,7 @@
 minutes on the reference reducer, so they are ``slow`` (``--runslow``);
 their numbers are recorded in PLAN.md.  The compiled ones were measured
 on skijack 0.2.0 and hold on 0.2.1; the interpreted ones are the kernel's
-with Joy's stages 1 to 4, measured on 0.2.1, where Avon runs them in
+with Joy's stages 1 to 5, measured on 0.2.1, where Avon runs them in
 under a minute (``SKIJACK_REDUCER=avon``).  The fast tests below check the generated source and the reader.
 """
 
@@ -16,15 +16,16 @@ from skilark.joy import DEFINITIONS
 DEFS = dict(DEFINITIONS, sq="dup +")
 
 #: host contractions, measured once (PLAN.md section 1c)
-LEVEL1_IQ, LEVEL1_IP = (30_226_536, 30_270_466), (31_304_568, 31_349_506)
+LEVEL1_IQ, LEVEL1_IP = (40_205_700, 40_256_126), (41_419_680, 41_471_114)
 LEVEL1_CQ, LEVEL1_CP = (2_328_665, 2_342_964), (2_337_648, 2_351_954)
-READER_YES, READER_NO, READER_TQ, READER_TE, READER_TERR = 277_007, 284_677, 98_557, 33_204, 14_794
-READER_TL, READER_NEG, READER_SYM = 96_546, 118_916, 94_868
+READER_YES, READER_NO, READER_TQ, READER_TE, READER_TERR = 309_539, 317_335, 127_441, 33_204, 14_794
+READER_TL, READER_NEG, READER_SYM = 124_724, 148_862, 122_348
+READER_TC, READER_TS = 120_309, 118_603
 
 #: (form, program, fuel) -> (outcome, host contractions)
 MEASURED = {
-    ("interpreted", "1 2 + dup +", 6000): LEVEL1_IQ,
-    ("interpreted", "1 2 + sq", 6000):    LEVEL1_IP,
+    ("interpreted", "1 2 + dup +", 7000): LEVEL1_IQ,
+    ("interpreted", "1 2 + sq", 7000):    LEVEL1_IP,
     ("compiled", "1 2 + dup +", 1500):    LEVEL1_CQ,
     ("compiled", "1 2 + sq", 1500):       LEVEL1_CP,
 }
@@ -70,6 +71,8 @@ tq   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Quot Done) Empty))>@400
 te   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal Empty)>@400
 terr := wfN dict |- <topIs (Suc (Suc Zero)) RErr>@400
 tl   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Logical True) Empty))>@400
+tc   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Char (Pos (Suc (Suc Zero)))) Empty))>@400
+ts   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Str TNil) Empty))>@400
 """
 
 
@@ -86,6 +89,8 @@ def test_the_level_1_answer_is_a_combinator_applied_to_atoms():
     assert r.run("tl", 20_000_000) == (("OLogical", None), READER_TL)
     assert r.run("neg", 20_000_000) == (("No", None), READER_NEG)
     assert r.run("sym", 20_000_000) == (("OSym", None), READER_SYM)
+    assert r.run("tc", 20_000_000) == (("OChar", None), READER_TC)
+    assert r.run("ts", 20_000_000) == (("OStr", None), READER_TS)
 
 
 # ---------------------------------------------------- the runs, measured
