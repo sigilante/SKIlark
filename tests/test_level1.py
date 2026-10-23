@@ -16,7 +16,7 @@ from skilark.joy import DEFINITIONS
 DEFS = dict(DEFINITIONS, sq="dup +")
 
 #: host contractions, measured once (PLAN.md section 1c)
-LEVEL1_IQ, LEVEL1_IP = (40_205_700, 40_256_126), (41_419_680, 41_471_114)
+LEVEL1_IQ, LEVEL1_IP = (33_524_535, 33_571_230), (34_659_638, 34_707_341)
 LEVEL1_CQ, LEVEL1_CP = (2_328_665, 2_342_964), (2_337_648, 2_351_954)
 READER_YES, READER_NO, READER_TQ, READER_TE, READER_TERR = 309_539, 317_335, 127_441, 33_204, 14_794
 READER_TL, READER_NEG, READER_SYM = 124_724, 148_862, 122_348
@@ -37,7 +37,7 @@ def test_a_namespace_name_becomes_a_fact_and_a_scry():
     src = joy.level1({"p": "1 2 + sq"}, ["sq"], 100, DEFS, value=6)
     assert "seg === Sq" in src
     assert "dict := ns{/sq => <Then Dup (Then Add (Done))>}" in src
-    assert "rp := wfN dict |- <topIs (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))) (execU (Then (Lit (Pos (Suc Zero))) (Then (Lit (Pos (Suc (Suc Zero)))) (Then Add (cat ?^/sq (Done))))) Empty)>@100" in src
+    assert "rp := wfN dict |- <topIs (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))) (execU (Then (Lit (Num (Pos (Suc Zero)))) (Then (Lit (Num (Pos (Suc (Suc Zero))))) (Then Add (cat ?^/sq (Done))))) Empty)>@100" in src
     assert "np := wfN dict |- <topIs (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero))))))) (execU" in src
 
 

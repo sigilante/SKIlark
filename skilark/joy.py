@@ -57,7 +57,7 @@ KERNEL = {
     "unit": "Unit", "dip": "Dip", "i": "Do", "+": "Add", "-": "Sub",
     "*": "Mul", "/": "Div", "rem": "Rem", "=": "Eql", "<": "Lt",
     "branch": "Branch", "ifte": "Ifte",
-    "true": "(Truth True)", "false": "(Truth False)",
+    "true": "(Lit (Logical True))", "false": "(Lit (Logical False))",
     "uncons": "Uncons", "null": "Null", "small": "Small",
     "stack": "Stack", "unstack": "Unstack", "ord": "Ord", "chr": "Chr",
 }
@@ -424,9 +424,10 @@ def codes_text(codes: Sequence[int]) -> str:
 
 
 def datum(prog: Program, basis: bool = False) -> str:
-    """A program as a ``prog`` expression; a kept name is a scry.  With
-    ``basis``, for the basis kernel (``programs/basis.ascii.ski``): its
-    literals are naturals and it has ``Ifz``."""
+    """A program as a ``prog`` expression; a kept name is a scry.  A
+    literal is ``Lit`` of its item.  With ``basis``, for the basis kernel
+    (``programs/basis.ascii.ski``): its literals are ``Lit`` of a natural
+    and ``Quote`` of a program, and it has ``Ifz``."""
     if not prog:
         return "Done"
     t, rest = prog[0], datum(prog[1:], basis)
@@ -437,15 +438,17 @@ def datum(prog: Program, basis: bool = False) -> str:
     if isinstance(t, int):
         if basis and t < 0:
             raise ValueError(f"the basis kernel has no negative numbers: {t}")
-        return f"Then (Lit {nat(t) if basis else integer(t)}) ({rest})"
+        return f"Then (Lit {nat(t)}) ({rest})" if basis else f"Then (Lit (Num {integer(t)})) ({rest})"
     if isinstance(t, list):
-        return f"Then (Quote ({datum(t, basis)})) ({rest})"
+        if basis:
+            return f"Then (Quote ({datum(t, basis)})) ({rest})"
+        return f"Then (Lit (Quot ({datum(t)}))) ({rest})"
     if isinstance(t, tuple):
         if basis:
             raise ValueError("the basis kernel has no characters")
         if t[0] == "C":
-            return f"Then (Glyph {integer(t[1])}) ({rest})"
-        return f"Then (Text {codes_text(t[1])}) ({rest})"
+            return f"Then (Lit (Char {integer(t[1])})) ({rest})"
+        return f"Then (Lit (Str {codes_text(t[1])})) ({rest})"
     if basis and t == "ifz":
         return f"Then Ifz ({rest})"
     if t in COMPILED_ONLY:
