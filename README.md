@@ -12,16 +12,18 @@ namespace.
   next words: `- * / rem = <` on signed, unbounded integers, the truth
   values `true false` with `branch` and `ifte`, quotations as lists,
   `uncons null small`, a word in one a symbol (`[dup +] first` is `dup`),
-  and the stack as data, `stack unstack`. `succ pred max min neg abs sign
-  not and or > <= >= != xor first rest swons unswons concat size at of
-  take drop` are derived, and so are Joy's combinators, `nullary infra
+  the stack as data, `stack unstack`, and characters and strings (`'a`,
+  `"ab"`, `ord chr`). `succ pred max min neg abs sign not and or > <= >=
+  != xor first rest swons unswons concat size at of take drop has in`
+  are derived, and so are Joy's combinators, `nullary infra
   times while tailrec linrec binrec genrec primrec map filter step fold`;
   run by a fold over the program (`exec`, one unit of fuel per word, the
   fuel the Church numeral 1,000; `execU`, no fuel). SKIlark grows toward
   Joy in full, in stages (`PLAN.md` §3), and Joy's behaviour is the
   reference implementation's: `tests/joyref.py` models it, and the tests
-  check every pinned outcome against the model, but for nine deviations
-  pinned with their reasons. `basis.ascii.ski` is the basis alone, with
+  check every pinned outcome against the model, but for ten deviations
+  pinned with their reasons. Joy's sets are not built: they need a
+  32nd `word` constructor, past Avon's cap (`PLAN.md` §3, stage 5). `basis.ascii.ski` is the basis alone, with
   SKIlark's own `ifz`, as phase 3 measured it.
 - `skilark/programs/joy.{ascii,unicode}.ski` — the kernel with a
   hand-written set of programs and Joy's laws (phase 1).
@@ -56,12 +58,13 @@ python -m skilark "-7 2 / -7 2 rem"       # -3 -1, as C truncates
 python -m skilark "[1 2 3 4] 2 take size" # 2
 python -m skilark "[1 2 3] [dup *] map"   # [1 4 9]
 python -m skilark "5 [1] [*] primrec"     # 120
+python -m skilark '"abc" [succ] map'      # "bcd"
 ```
 
 ```
 $ python -m skilark "3 [dup +] i"
-interpreted  unfuelled      4,268  6
-interpreted  fuelled        4,257  6
+interpreted  unfuelled      5,050  6
+interpreted  fuelled        5,039  6
 compiled     unfuelled        428  6
 compiled     fuelled          442  6
 ```

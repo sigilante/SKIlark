@@ -1,7 +1,7 @@
 """The Joy front end: text to programs, in three forms.
 
-A Joy program is whitespace-separated words, numerals and bracketed
-quotations.  Derived words are definitions ``name == body`` and are
+A Joy program is whitespace-separated words, numerals, characters
+(``'a``), strings (``"ab"``) and bracketed quotations.  Derived words are definitions ``name == body`` and are
 inlined at their use, so the program's own names are its dictionary and
 nothing is looked up at run time -- except, at level 1, the names the
 caller leaves in the namespace, which the program reads by scry.
@@ -31,7 +31,7 @@ from __future__ import annotations
 import pathlib
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
-Token = Union[int, str, "Def", List["Token"]]
+Token = Union[int, str, "Def", Tuple[str, object], List["Token"]]
 Program = List[Token]
 
 
@@ -59,7 +59,7 @@ KERNEL = {
     "branch": "Branch", "ifte": "Ifte",
     "true": "(Truth True)", "false": "(Truth False)",
     "uncons": "Uncons", "null": "Null", "small": "Small",
-    "stack": "Stack", "unstack": "Unstack",
+    "stack": "Stack", "unstack": "Unstack", "ord": "Ord", "chr": "Chr",
 }
 
 #: a kernel symbol's Joy name, by its constructor
@@ -92,8 +92,9 @@ LIST_WORDS = {"uncons", "null", "small", "stack", "unstack"}
 #: The derived words: Joy's, as the reference implementation (Wodan58/Joy)
 #: behaves, and Kerby's k and y.  A reference builtin derived here checks
 #: its arguments where the kernel words it is made of check them: the
-#: guards ``dup 0 * pop`` (an integer) and ``dup dup cat pop`` (an
-#: aggregate) restore checks a definition would otherwise skip.  The
+#: guards ``dup 0 * pop`` (an integer), ``dup ord pop`` (a number, a
+#: character or a truth value) and ``dup dup cat pop`` (an aggregate)
+#: restore checks a definition would otherwise skip.  The
 #: combinators take their quotations into the body ``y`` recurses on, so
 #: the stack they run on is the caller's; ``map`` and ``filter`` run each
 #: element on the caller's stack with ``infra``.
@@ -121,8 +122,8 @@ DEFINITIONS = {
     "pred": "1 -",
     "abs": "dup 0 * pop dup 0 < [0 swap -] [] branch",
     "sign": "dup 0 * pop dup 0 < [pop -1] [0 = [0] [1] branch] branch",
-    "max": "over over < [swap pop] [pop] branch",
-    "min": "over over < [pop] [swap pop] branch",
+    "max": "dup ord pop over ord pop over over < [swap pop] [pop] branch",
+    "min": "dup ord pop over ord pop over over < [pop] [swap pop] branch",
     # comparison: = and < are the kernel's, and the others are what the
     # reference's comparison gives, which orders some values neither way
     ">": "over over < [pop pop false] [!=] branch",
@@ -130,10 +131,10 @@ DEFINITIONS = {
     ">=": "< not",
     "!=": "= not",
     # truth values: any value is one, zero and empty false
-    "not": "[false] [true] branch",
+    "not": "dup ord pop [false] [true] branch",
     "and": "not not swap not not [] [pop false] branch",
     "or": "not not swap not not [pop true] [] branch",
-    "xor": "!=",
+    "xor": "dup ord pop over ord pop !=",
     # lists
     "first": "uncons pop",
     "rest": "uncons swap pop",
@@ -141,12 +142,14 @@ DEFINITIONS = {
     "unswons": "uncons swap",
     "concat": "cat",
     "size": "dup dup cat pop [swap [null] [pop pop 0] [rest swap i 1 +] ifte] y",
-    "drop": "dup 0 < [[] first] [] branch [dup dup cat pop] dip "
+    "drop": "dup 0 * pop dup 0 < [[] first] [] branch [dup dup cat pop] dip "
             "[swap [[pop null] dip 0 = or] [pop pop] [pred swap [[rest] dip] dip i] ifte] y",
-    "take": "dup 0 < [[] first] [] branch [dup dup cat pop] dip "
-            "[swap [[pop null] dip 0 = or] [pop pop pop []] [pred [[uncons] dip] dip swap i cons] ifte] y",
+    "take": "dup 0 * pop dup 0 < [[] first] [] branch [dup dup cat pop] dip "
+            "[swap [[pop null] dip 0 = or] [pop pop dup size drop] [pred [[uncons] dip] dip swap i cons] ifte] y",
     "at": "drop first",
     "of": "swap at",
+    "has": "[=] cons filter null not",
+    "in": "swap has",
     # the stack as data
     "nullary": "[stack] dip infra first",
     "infra": "[[stack] dip] dip [stack] cat rolldown unit cat [cons unstack] cat [unstack] dip i",
@@ -163,7 +166,7 @@ DEFINITIONS = {
               "swap [i] cons swap cons cat i] ifte] cons cons cons cons y",
     "genrec": "[[pop pop pop swap pop i] [pop pop swap pop swap pop i] "
               "[[[pop pop] dip] dip rolldown [i] cons swap cons cat i] ifte] cons cons cons cons y",
-    "primrec": "[[pop] swap cat [0 > not] swap [dup dup = [dup pred] [uncons] branch]] dip linrec",
+    "primrec": "[[pop] swap cat [0 > not] swap [dup 0 swap < [dup pred] [uncons] branch]] dip linrec",
     "map": "[dup dup cat pop] dip [[stack] dip] dip [swap] dip [infra first] cons [cons] swap cat cons "
            "[i] cons unit [dip] cat [uncons] swap cat [[null] []] dip [cons] linrec",
     "filter": "[dup dup cat pop] dip [[stack] dip] dip [swap] dip [infra first] cons [cons] swap cat cons "
@@ -179,22 +182,78 @@ DEFINITIONS = {
 
 # ------------------------------------------------------------------ parsing
 
+#: the escapes after a backslash in a character or a string, as the
+#: reference's scanner reads them (scan.c ``special``); up to three decimal
+#: digits are a code
+ESCAPES = {"b": 8, "t": 9, "n": 10, "v": 11, "f": 12, "r": 13, '"': 34, "'": 39, "\\": 92}
+
+
+def _escape(text: str, i: int) -> Tuple[int, int]:
+    """The code of the escape after a backslash at ``i``, and its end."""
+    if i >= len(text):
+        raise ValueError("an escape at the end of the text")
+    c = text[i]
+    if c in ESCAPES:
+        return ESCAPES[c], i + 1
+    if c.isdigit():
+        j = i + 1
+        while j < len(text) and j < i + 3 and text[j].isdigit():
+            j += 1
+        return int(text[i:j]), j
+    return ord(c), i + 1
+
+
 def parse(text: str) -> Program:
-    """``"3 [dup +] i"`` -> ``[3, ['dup', '+'], 'i']``."""
-    toks = text.replace("[", " [ ").replace("]", " ] ").split()
+    """``"3 [dup +] i"`` -> ``[3, ['dup', '+'], 'i']``; a character
+    ``'a`` is ``("C", 97)`` and a string ``"ab"`` is ``("T", (97, 98))``."""
     stack: List[Program] = [[]]
-    for t in toks:
-        if t == "[":
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if c.isspace():
+            i += 1
+        elif c == "[":
             stack.append([])
-        elif t == "]":
+            i += 1
+        elif c == "]":
             if len(stack) == 1:
                 raise ValueError("unbalanced ']'")
             q = stack.pop()
             stack[-1].append(q)
-        elif t.isdigit() or (t[0] == "-" and t[1:].isdigit()):
-            stack[-1].append(int(t))
+            i += 1
+        elif c == "'":
+            if i + 1 >= len(text):
+                raise ValueError("a character quote at the end of the text")
+            if text[i + 1] == "\\":
+                code, i = _escape(text, i + 2)
+            else:
+                code, i = ord(text[i + 1]), i + 2
+            stack[-1].append(("C", code))
+        elif c == '"':
+            i += 1
+            codes = []
+            while True:
+                if i >= len(text):
+                    raise ValueError("an unclosed string")
+                if text[i] == '"':
+                    break
+                if text[i] == "\\":
+                    code, i = _escape(text, i + 1)
+                else:
+                    code, i = ord(text[i]), i + 1
+                codes.append(code)
+            stack[-1].append(("T", tuple(codes)))
+            i += 1
         else:
-            stack[-1].append(t)
+            j = i
+            while j < len(text) and not text[j].isspace() and text[j] not in "[]":
+                j += 1
+            t = text[i:j]
+            i = j
+            if t.isdigit() or (t[0] == "-" and t[1:].isdigit()):
+                stack[-1].append(int(t))
+            else:
+                stack[-1].append(t)
     if len(stack) != 1:
         raise ValueError("unbalanced '['")
     return stack[0]
@@ -219,7 +278,9 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
     keep = set(keep)
     out: Program = []
     for t in prog:
-        if isinstance(t, list):
+        if isinstance(t, tuple):
+            out.append(t)
+        elif isinstance(t, list):
             out.append(expand(t, defs, keep, True))
         elif isinstance(t, str) and t in defs and t not in keep:
             body = expand(parse(defs[t]), defs, keep)
@@ -235,10 +296,19 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
     return out
 
 
+def literal_text(t: Tuple[str, object]) -> str:
+    """A character or string literal back as Joy text, every character a
+    decimal escape."""
+    if t[0] == "C":
+        return f"'\\{t[1]:03d}"
+    return '"' + "".join(f"\\{c:03d}" for c in t[1]) + '"'
+
+
 def words(prog: Program) -> str:
     """A program back as Joy text."""
     return " ".join(f"[{words(t)}]" if isinstance(t, list) else
-                    t.name if isinstance(t, Def) else str(t) for t in prog)
+                    t.name if isinstance(t, Def) else
+                    literal_text(t) if isinstance(t, tuple) else str(t) for t in prog)
 
 
 def flatten(prog: Program) -> Program:
@@ -297,10 +367,21 @@ def _uses_lists(progs: Iterable[Program]) -> bool:
     return _walk(progs, lambda t: t in LIST_WORDS)
 
 
+#: the words that make a character; with a character or a string literal,
+#: a compiled program has characters and strings only when it uses one
+TEXT_WORDS = {"chr", "ord"}
+
+
+def _uses_text(progs: Iterable[Program]) -> bool:
+    """Whether any program has a character or a string."""
+    return _walk(progs, lambda t: isinstance(t, tuple) or t in TEXT_WORDS)
+
+
 def _uses_signs(progs: Iterable[Program]) -> bool:
     """Whether any program can make a negative number: a signed word or a
     negative literal."""
-    return _walk(progs, lambda t: t in SIGNED_WORDS or (isinstance(t, int) and t < 0))
+    return _walk(progs, lambda t: t in SIGNED_WORDS or (isinstance(t, int) and t < 0)
+                 or (isinstance(t, tuple) and t[0] == "C" and t[1] < 0))
 
 
 def _kernel() -> str:
@@ -334,6 +415,14 @@ def name_text(name: str) -> str:
     return out
 
 
+def codes_text(codes: Sequence[int]) -> str:
+    """A string's codes as the kernel's ``text``."""
+    out = "TNil"
+    for c in reversed(codes):
+        out = f"(TCons {integer(c)} {out})"
+    return out
+
+
 def datum(prog: Program, basis: bool = False) -> str:
     """A program as a ``prog`` expression; a kept name is a scry.  With
     ``basis``, for the basis kernel (``programs/basis.ascii.ski``): its
@@ -351,6 +440,12 @@ def datum(prog: Program, basis: bool = False) -> str:
         return f"Then (Lit {nat(t) if basis else integer(t)}) ({rest})"
     if isinstance(t, list):
         return f"Then (Quote ({datum(t, basis)})) ({rest})"
+    if isinstance(t, tuple):
+        if basis:
+            raise ValueError("the basis kernel has no characters")
+        if t[0] == "C":
+            return f"Then (Glyph {integer(t[1])}) ({rest})"
+        return f"Then (Text {codes_text(t[1])}) ({rest})"
     if basis and t == "ifz":
         return f"Then Ifz ({rest})"
     if t in COMPILED_ONLY:
@@ -489,14 +584,14 @@ cmpN m n = m |> {{ Zero (n |> {{ Zero Same; Suc j Less }}); Suc i (n |> {{ Zero 
 {CMPZ}
 -- a quotation is empty when it is a static empty one, or [P] [Q] cat of
 -- two empty ones; QThen stands only as the tail of a cat
-catEmpty eq x r = r |> {{ {QFALSE}QCons y o False; QUnit y False; QThen b (x |> {{ Num n False; Quot l (both (eq l) (eq b)); Logical c False{SYMFALSE} }}) }}
+catEmpty eq x r = r |> {{ {QFALSE}QCons y o False; QUnit y False; QThen b (x |> {{ Num n False; Quot l (both (eq l) (eq b)); Logical c False{SYMFALSE}{TXFALSE} }}) }}
 emptyQ q = q |> {{ {EMPTIES}QCons x r (catEmpty emptyQ x r); QUnit x False; QThen b (emptyQ b) }}
-nullish x = x |> {{ Num n (zero n); Quot q (emptyQ q); Logical b (negate b){SYMFALSE} }}
-cmpI x y = x |> {{ Num m (y |> {{ Num n (cmpZ m n); Quot q More; Logical c (cmpZ m (boolZ c)){SYMMORE} }}); Quot q More; Logical b (y |> {{ Num n (cmpZ (boolZ b) n); Quot q More; Logical c (cmpZ (boolZ b) (boolZ c)){SYMMORE} }}){SYMCMP} }}
+nullish x = x |> {{ Num n (zero n); Quot q (emptyQ q); Logical b (negate b){SYMFALSE}{TXNULL} }}
+cmpI x y = x |> {{ Num m (y |> {{ Num n (cmpZ m n); Quot q More; Logical c (cmpZ m (boolZ c)){SYMMORE}{TXNUM} }}); Quot q More; Logical b (y |> {{ Num n (cmpZ (boolZ b) n); Quot q More; Logical c (cmpZ (boolZ b) (boolZ c)){SYMMORE}{TXLOG} }}){SYMCMP}{TXCMP} }}
 compare x y = both (nullish x) (nullish y) |> {{ True Same; False (cmpI x y) }}
 isSame o = o |> {{ Less False; Same True; More False }}
 isLess o = o |> {{ Less True; Same False; More False }}
-truth x = x |> {{ Num n (negate (zero n)); Quot q (negate (emptyQ q)); Logical b b{SYMTRUE} }}
+truth x = x |> {{ Num n (negate (zero n)); Quot q (negate (emptyQ q)); Logical b b{SYMTRUE}{TXTRUE} }}{TXDEFS}
 wTruth b s = RVal (Push (Logical b) s)
 wEql s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (RVal (Push (Logical (isSame (compare b a))) u)) }}) }}
 wLt s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (RVal (Push (Logical (isLess (compare b a))) u)) }}) }}
@@ -526,17 +621,44 @@ view === VEmpty | VCons item quot
 -- names, so that = and < compare symbols by name
 symNo y = y |> {{ {SYMNO} }}
 symRun ap y = y |> {{ {SYMRUN} }}
-consRun k x r s = x |> {{ Num n (k r (Push x s)); Quot q (k r (Push x s)); Logical b (k r (Push x s)); Sym y (seq (symRun k y) (k r) s) }}
-catView vq x r = r |> {{ {CATQ}QCons y o (VCons x r); QUnit y (VCons x r); QThen b (x |> {{ Num n (VCons x r); Quot l (vq l |> {{ VEmpty (vq b); VCons y m (VCons y (QCons (Quot m) (QThen b))) }}); Logical c (VCons x r); Sym z (VCons x r) }}) }}
+consRun k x r s = x |> {{ Num n (k r (Push x s)); Quot q (k r (Push x s)); Logical b (k r (Push x s)); Sym y (seq (symRun k y) (k r) s){TXPUSH} }}
+catView vq x r = r |> {{ {CATQ}QCons y o (VCons x r); QUnit y (VCons x r); QThen b (x |> {{ Num n (VCons x r); Quot l (vq l |> {{ VEmpty (vq b); VCons y m (VCons y (QCons (Quot m) (QThen b))) }}); Logical c (VCons x r); Sym z (VCons x r){TXVIEW} }}) }}
 viewQ q = q |> {{ {VIEWS}QCons x r (catView viewQ x r); QUnit x (VCons x {QE}); QThen b (viewQ b) }}
-wUncons s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (viewQ r |> {{ VEmpty RErr; VCons x p (RVal (Push (Quot p) (Push x t))) }}); Logical c RErr; Sym y RErr }}) }}
+wUncons s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (viewQ r |> {{ VEmpty RErr; VCons x p (RVal (Push (Quot p) (Push x t))) }}); Logical c RErr; Sym y RErr{TXUNCONS} }}) }}
 wNull s = s |> {{ Empty RErr; Push a t (RVal (Push (Logical (nullish a)) t)) }}
-wSmall s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (RVal (Push (Logical (upToOne n)) t)); Quot r (RVal (Push (Logical (viewQ r |> {{ VEmpty True; VCons x p (viewQ p |> {{ VEmpty True; VCons y o False }}) }})) t)); Logical c (RVal (Push (Logical True) t)); Sym y RErr }}) }}
+wSmall s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (RVal (Push (Logical (upToOne n)) t)); Quot r (RVal (Push (Logical (viewQ r |> {{ VEmpty True; VCons x p (viewQ p |> {{ VEmpty True; VCons y o False }}) }})) t)); Logical c (RVal (Push (Logical True) t)); Sym y RErr{TXSMALL} }}) }}
 -- the stack as a list, top first, and a list as the stack
 toQ s = s |> {{ Empty {QE}; Push a t (QCons a (toQ t)) }}
 fromQ r = viewQ r |> {{ VEmpty Empty; VCons x p (Push x (fromQ p)) }}
 wStack s = RVal (Push (Quot (toQ s)) s)
-wUnstack s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (RVal (fromQ r)); Logical c RErr; Sym y RErr }}) }}
+wUnstack s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (RVal (fromQ r)); Logical c RErr; Sym y RErr{TX} }}) }}
+"""
+
+
+#: a compiled program's characters and strings, present only in a program
+#: that has one (``_uses_text``): a character is its code, a string its
+#: codes; ``cons``, ``cat``, ``+`` and ``-`` take them, so their lines are
+#: replaced (``_TEXT_LINES``)
+COMPILED_TEXT = """
+-- characters and strings: a character is its code, a string its codes
+catT y z = y |> {{ TNil z; TCons c r (TCons c (catT r z)) }}
+wGlyph c s = RVal (Push (Char c) s)
+wText z s = RVal (Push (Str z) s)
+wOrd s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (RVal (Push (Num n) t)); Quot q RErr{ORDLOG}{ORDSYM}; Char c (RVal (Push (Num c) t)); Str xs RErr }}) }}
+wChr s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (RVal (Push (Char n) t)); Quot q RErr{CHRLOG}{ORDSYM}; Char c (RVal (Push (Char c) t)); Str xs RErr }}) }}
+{NUM2C}{SYMTEXT}"""
+
+#: the lines a program with characters replaces: cons onto a string, cat of
+#: two strings, + and - of a character and an integer
+_TEXT_LINES = {
+    "wQcons s = ": "wQcons s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (t |> {{ Empty RErr; Push b u (RVal (Push (Quot (QCons b r)) u)) }}){LCNT}; Char xc RErr; Str z (t |> {{ Empty RErr; Push b u (b |> {{ Num n RErr; Quot q RErr{LCNT}; Char c (RVal (Push (Str (TCons c z)) u)); Str xs RErr }}) }}) }}) }}",
+    "wCat s = ": "wCat s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (t |> {{ Empty RErr; Push b u (b |> {{ Num m RErr; Quot l (RVal (Push (Quot (QCons (Quot l) (QThen r))) u)){LC} }}) }}){LCNT}; Char xc RErr; Str z (t |> {{ Empty RErr; Push b u (b |> {{ Num m RErr; Quot l RErr{LCNT}; Char xc RErr; Str y (RVal (Push (Str (catT y z)) u)) }}) }}) }}) }}",
+}
+_TEXT_ADD_NATURALS = "wAdd s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (RVal (Push (Num (add m n)) u)); Quot r RErr{LCNT}; Char c (RVal (Push (Char (add m c)) u)); Str xs RErr }}); Quot r RErr{LC} }}) }}) }}"
+_TEXT_NUM2C = """-- + and -: an integer on top, below it an integer or a character, whose
+-- kind the result takes
+num2c f s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (RVal (Push (Num (f n m)) u)); Quot r RErr{LCNT}; Char c (RVal (Push (Char (f c m)) u)); Str xs RErr }}); Quot r RErr{LC} }}) }}) }}
+subZ n m = plus n (minus m)
 """
 
 
@@ -546,8 +668,9 @@ class _Lists:
     each static quotation's view."""
 
     def __init__(self, syms: List[str], views: List[str], qe: str,
-                 sym_run: List[str]) -> None:
+                 sym_run: List[str], names: Sequence[str] = ()) -> None:
         self.syms, self.views, self.qe, self.sym_run = syms, views, qe, sym_run
+        self.names = list(names)                # each symbol's Joy name
 
 
 #: a derived word's symbol: ``Z`` and its name, an operator's characters
@@ -581,12 +704,16 @@ def symbol_name(ctor: str) -> str:
 
 def _compiled_kernel(n: int, truth: bool, signs: bool,
                      lists: "Optional[_Lists]" = None,
-                     empties: Sequence[bool] = ()) -> str:
+                     empties: Sequence[bool] = (), text: bool = False) -> str:
     """The compiled kernel for ``n`` static quotations (``empties`` says
     which are empty), with truth values when ``truth``, integers when
-    ``signs`` (else naturals), and the list words when ``lists``."""
-    ls = "; Sym sy RErr" if lists else ""
-    lc = ("; Logical lg RErr" if truth else "") + ls
+    ``signs`` (else naturals), the list words when ``lists``, and
+    characters and strings when ``text``."""
+    tx = "; Char xc RErr; Str xs RErr" if text else ""
+    lcnt = ("; Logical lg RErr" if truth else "") + ("; Sym sy RErr" if lists else "")
+    ls = ("; Sym sy RErr" if lists else "") + tx
+    lc = lcnt + tx
+    lit = (lambda k: integer(k)) if signs else nat
     numbers = COMPILED_INTEGERS if signs else COMPILED_NATURALS
     if lists:
         syms = lists.syms or ["YNone"]
@@ -597,7 +724,15 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
             SYMRUN="; ".join(lists.sym_run or ["YNone idW"]),
             CATQ="".join(f"Q{k} (VCons x r); " for k in range(1, n + 1)),
             VIEWS="".join(f"Q{k} {v}; " for k, v in enumerate(lists.views, start=1)),
-            QE=lists.qe)
+            QE=lists.qe,
+            TXPUSH="; Char c (k r (Push x s)); Str z (k r (Push x s))" if text else "",
+            TXVIEW="; Char c (VCons x r); Str w (VCons x r)" if text else "",
+            TXUNCONS=("; Char xc RErr; Str z (z |> { TNil RErr; TCons c r "
+                      "(RVal (Push (Str r) (Push (Char c) t))) })") if text else "",
+            TXSMALL=("; Char c (RVal (Push (Logical (upToOne c)) t)); Str z (RVal (Push "
+                     "(Logical (z |> { TNil True; TCons c r (r |> { TNil True; TCons d o False }) })) t))")
+            if text else "",
+            TX=tx)
         symtype = f"sym    === {' | '.join(syms)}\n"
     else:
         cons_f, unit_f = "(k r (Push x s))", "(RVal (Push x s))"
@@ -615,19 +750,74 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
             SYMTRUE="; Sym z True" if lists else "",
             SYMMORE="; Sym z More" if lists else "",
             SYMCMP=("; Sym z (y |> { Num n More; Quot q More; Logical c More; "
-                    "Sym w (cmpN (symNo z) (symNo w)) })") if lists else "")
-    return COMPILED_KERNEL.format(
+                    "Sym w (cmpN (symNo z) (symNo w))"
+                    + ("; Char c More; Str w (cmpT (symText z) w)" if text else "")
+                    + " })") if lists else "",
+            TXFALSE="; Char c False; Str z False" if text else "",
+            TXNULL="; Char c (zero c); Str z (z |> { TNil True; TCons c r False })" if text else "",
+            TXTRUE="; Char c (negate (zero c)); Str z (z |> { TNil False; TCons c r True })" if text else "",
+            TXNUM="; Char c (cmpZ m c); Str z More" if text else "",
+            TXLOG="; Char c (cmpZ (boolZ b) c); Str z More" if text else "",
+            TXCMP=("; Char c (y |> { Num n (cmpZ c n); Quot q More; Logical d (cmpZ c (boolZ d))"
+                   + ("; Sym w More" if lists else "") + "; Char d (cmpZ c d); Str z More })"
+                   "; Str z (y |> { Num n More; Quot q More; Logical c More"
+                   + ("; Sym w (cmpT z (symText w))" if lists else "")
+                   + "; Char c More; Str w (cmpT z w) })") if text else "",
+            TXDEFS=("\n-- strings compare as strcmp does, code by code\n"
+                    "cmpT s t = s |> { TNil (t |> { TNil Same; TCons d u Less }); TCons c r "
+                    "(t |> { TNil More; TCons d u (cmpZ c d |> { Less Less; Same (cmpT r u); "
+                    "More More }) }) }") if text else "")
+    text_block = ""
+    if text:
+        symtext = ""
+        if lists and truth:
+            symtext = "-- a symbol's name, its codes, to compare with a string\nsymText y = y |> { " + "; ".join(
+                f"{y} {_codes(lit, nm)}" for y, nm in zip(lists.syms or ["YNone"], lists.names or [""])) + " }\n"
+        text_block = COMPILED_TEXT.format(
+            ORDLOG="; Logical b (RVal (Push (Num (boolZ b)) t))" if truth else "",
+            CHRLOG="; Logical b (RVal (Push (Char (boolZ b)) t))" if truth else "",
+            ORDSYM="; Sym y RErr" if lists else "",
+            NUM2C=_TEXT_NUM2C.format(LC=lc, LCNT=lcnt) if signs else "",
+            SYMTEXT=symtext)
+        symtype = symtype + f"text   === TNil | TCons {'int' if signs else 'nat'} text\n"
+    out = COMPILED_KERNEL.format(
         QUOTS="".join(f"Q{k} | " for k in range(1, n + 1)),
         CASES_F="".join(f"Q{i} (b{i} k s); " for i in range(1, n + 1)),
         CASES_U="".join(f"Q{k} (b{k} applyU s); " for k in range(1, n + 1)),
-        LITEM=(" | Logical logical" if truth else "") + (" | Sym sym" if lists else ""),
+        LITEM=(" | Logical logical" if truth else "") + (" | Sym sym" if lists else "")
+        + (f" | Char {'int' if signs else 'nat'} | Str text" if text else ""),
         LC=lc, SYMTYPE=symtype,
         CONS_F=cons_f, UNIT_F=unit_f, CONS_U=cons_u, UNIT_U=unit_u,
         INTTYPE="int    === Pos nat | Neg nat\n" if signs else "",
         NUM="int" if signs else "nat",
         NUMBERS=numbers.format(LC=lc),
         TRUTH=truth_block,
-        LISTS=block)
+        LISTS=block + text_block)
+    if text:
+        lines = dict(_TEXT_LINES)
+        if signs:
+            lines["wAdd s = "] = "wAdd s = num2c plus s"
+            lines["wSub s = "] = "wSub s = num2c subZ s"
+        else:
+            lines["wAdd s = "] = _TEXT_ADD_NATURALS
+        out = "\n".join(_text_line(line, lines, lc, lcnt) for line in out.split("\n"))
+    return out
+
+
+def _text_line(line: str, lines: Dict[str, str], lc: str, lcnt: str) -> str:
+    """A kernel line, or its replacement in a program with characters."""
+    for prefix, new in lines.items():
+        if line.startswith(prefix):
+            return new.format(LC=lc, LCNT=lcnt)
+    return line
+
+
+def _codes(lit, name: str) -> str:
+    """A name's characters' codes as a ``text`` of the program's numbers."""
+    out = "TNil"
+    for c in reversed(name):
+        out = f"(TCons {lit(ord(c))} {out})"
+    return out
 
 
 class _Compiler:
@@ -643,6 +833,13 @@ class _Compiler:
     def literal(self, n: int) -> str:
         return integer(n) if self.signs else nat(n)
 
+    def text(self, codes: Sequence[int]) -> str:
+        """A string's codes as a ``text`` of the program's numbers."""
+        out = "TNil"
+        for c in reversed(codes):
+            out = f"(TCons {self.literal(c)} {out})"
+        return out
+
     def item(self, t: Token) -> str:
         """A static quotation's element as an item: a literal its value, a
         word a symbol."""
@@ -652,6 +849,8 @@ class _Compiler:
             return f"(Quot {self.quot(t)})"
         if t in ("true", "false"):
             return f"(Logical {t.capitalize()})"
+        if isinstance(t, tuple):
+            return f"(Char {self.literal(t[1])})" if t[0] == "C" else f"(Str {self.text(t[1])})"
         if isinstance(t, Def):
             ctor = def_symbol(t.name)
             if ctor not in self.syms:
@@ -693,7 +892,8 @@ class _Compiler:
         if len(views) != len(self.quots):
             raise AssertionError("a view added a quotation after hoisting")
         order = sorted(self.syms, key=lambda k: self.syms[k][0])
-        return _Lists(order, views, qe, [self.syms[k][1] for k in order])
+        return _Lists(order, views, qe, [self.syms[k][1] for k in order],
+                      [self.syms[k][0] for k in order])
 
     def quot(self, q: Program) -> str:
         key = words(q)
@@ -707,6 +907,8 @@ class _Compiler:
             return f"(wLit {self.literal(t)})"
         if isinstance(t, list):
             return f"(wQuote {self.quot(t)})"
+        if isinstance(t, tuple):
+            return f"(wGlyph {self.literal(t[1])})" if t[0] == "C" else f"(wText {self.text(t[1])})"
         if t == "ifz":
             if self.signs:
                 raise ValueError("ifz takes naturals; this program's numbers are integers")
@@ -741,7 +943,7 @@ def _compile_set(progs: List[Program]):
     word as a symbol, so its programs are flattened: they compile as they
     did before ``Def``."""
     signs, lists = _uses_signs(progs), _uses_lists(progs)
-    return signs, lists, lists or _uses_truth(progs)
+    return signs, lists, lists or _uses_truth(progs), _uses_text(progs)
 
 
 def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
@@ -750,7 +952,7 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     ``rP`` (under ``apply fuel``, ``fuel`` a Church numeral) and ``uP``
     (under ``applyU``)."""
     progs = _programs(programs, defs)
-    signs, lists, truth = _compile_set(list(progs.values()))
+    signs, lists, truth, text = _compile_set(list(progs.values()))
     if not lists:
         progs = {name: flatten(prog) for name, prog in progs.items()}
     c = _Compiler(signs, lists)
@@ -759,7 +961,7 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
         c.quot([])
     bodies = c.hoist()
     info = c.list_info()
-    kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties())
+    kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties(), text)
     out = [kernel, "\n-- static quotations, hoisted\n"]
     out.extend(f"{b}\n" for b in bodies)
     out.append("\n-- programs, from skilark.joy.compiled\n")
@@ -823,18 +1025,21 @@ topIs v r = r |> {{ RVal s (s |> {{ Empty (S S); Push a t (a |> {{ Num n {TEST};
 """
 
 
-def level1_reader(truth: bool, signs: bool, lists: bool = False) -> str:
+def level1_reader(truth: bool, signs: bool, lists: bool = False, text: bool = False) -> str:
     """The level-1 reader for a kernel whose items include truth values
     when ``truth`` (a truth value on top answers ``S S K``), whose numbers
     are integers when ``signs`` (a negative is not the natural asked for),
-    and whose items include symbols when ``lists`` (``S S I``)."""
+    whose items include symbols when ``lists`` (``S S I``), and characters
+    and strings when ``text`` (``S K S`` and ``S S S``)."""
     test = "(n |> {{ Pos m (eqNat m v); Neg m (K I) }})" if signs else "(eqNat n v)"
-    lc = ("; Logical b (S S K)" if truth else "") + ("; Sym y (S S I)" if lists else "")
+    lc = (("; Logical b (S S K)" if truth else "") + ("; Sym y (S S I)" if lists else "")
+          + ("; Char c (S K S); Str z (S S S)" if text else ""))
     return _LEVEL1_READER.format(LC=lc, TEST=test.format())
 
 
-#: the reader for the interpreted kernel: truth values, integers, symbols
-LEVEL1_READER = level1_reader(True, True, True)
+#: the reader for the interpreted kernel: truth values, integers, symbols,
+#: characters and strings
+LEVEL1_READER = level1_reader(True, True, True, True)
 
 
 def level1(programs: Dict[str, str], namespace: Sequence[str],
@@ -855,13 +1060,13 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
     progs = _programs(programs, defs, keep)
     if form == "interpreted":
         kernel = _kernel()
-        truth = signs = lists = True
+        truth = signs = lists = text = True
         facts = {n: datum(expand(parse(defs[n]), defs)) for n in keep}
         runs = {name: f"execU ({datum(prog)}) Empty" for name, prog in progs.items()}
         hoisted: List[str] = []
     elif form == "compiled":
         facts_progs = {n: expand(parse(defs[n]), defs) for n in keep}
-        signs, lists, truth = _compile_set(list(progs.values()) + list(facts_progs.values()))
+        signs, lists, truth, text = _compile_set(list(progs.values()) + list(facts_progs.values()))
         if not lists:
             progs = {name: flatten(prog) for name, prog in progs.items()}
             facts_progs = {n: flatten(prog) for n, prog in facts_progs.items()}
@@ -871,12 +1076,12 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
         if lists:
             c.quot([])
         hoisted = c.hoist()
-        kernel = _compiled_kernel(len(c.quots), truth, signs, c.list_info(), c.empties())
+        kernel = _compiled_kernel(len(c.quots), truth, signs, c.list_info(), c.empties(), text)
     else:
         raise ValueError(f"unknown form {form!r}")
     out = [kernel, "\n".join(hoisted) + ("\n" if hoisted else ""),
            LEVEL1_KERNEL.format(SEGS=" | ".join(segment(n) for n in keep)),
-           level1_reader(truth, signs, lists),
+           level1_reader(truth, signs, lists, text),
            "\ndict := ns{" + ", ".join(f"/{n} => <{v}>" for n, v in facts.items()) + "}\n",
            f"\n-- programs, from skilark.joy.level1 ({form} form)\n"]
     for name, run in runs.items():

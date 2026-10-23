@@ -15,21 +15,23 @@ import conform
 import joyref
 
 VALUES = ["0", "1", "2", "3", "-1", "-2", "true", "false", "[]", "[1]", "[1 2]", "[2 1 3]",
-          "[[1] [2 3]]", "[dup]", "[true 0]", "[dup] first", "[size] first"]
+          "[[1] [2 3]]", "[dup]", "[true 0]", "[dup] first", "[size] first",
+          "'a", "'\\000", '"ab"', '""', '"dup"', "['a \"b\"]"]
 QUOTES = ["[dup]", "[pop]", "[swap]", "[1 +]", "[dup *]", "[pred]", "[succ]", "[0 =]", "[null]",
           "[small]", "[1]", "[]", "[pop true]", "[pop false]", "[+]", "[2 <]", "[first]", "[rest]",
-          "[uncons]", "[dup pred]", "[*]", "[not]", "[size]", "[i]", "[[1] i]", "[stack]"]
+          "[uncons]", "[dup pred]", "[*]", "[not]", "[size]", "[i]", "[[1] i]", "[stack]",
+          "[ord]", "[chr]", "['a =]"]
 WORDS = ("dup swap pop over rollup rolldown rotate dupd swapd popd id cons swons uncons unswons "
          "first rest concat size null small take drop at of + - * / rem succ pred max min abs "
-         "sign neg = < > <= >= != not and or xor stack unstack i x dip").split()
+         "sign neg = < > <= >= != not and or xor stack unstack i x dip ord chr has in").split()
 #: combinators by how many quotations they take
 COMBINATORS = {1: "nullary infra times map filter step".split(), 2: "while branch".split(),
                3: "ifte tailrec primrec fold".split(), 4: "linrec binrec genrec".split()}
 
 #: the words whose deviations ``test_conformance.DEVIATIONS`` names: a
 #: difference from the reference in a program without one is a bug
-DEVIANT = {"not", "and", "or", "xor", "max", "min", "succ", "pred", "take", "drop", "at",
-           "of", "times", "while", "tailrec", "linrec", "binrec", "genrec", "primrec"}
+DEVIANT = {"and", "or", "xor", "max", "min", "succ", "pred", "take", "drop", "at", "of",
+           "times", "while", "tailrec", "linrec", "binrec", "genrec", "primrec", "map"}
 
 
 def program(rng: random.Random) -> str:

@@ -54,13 +54,49 @@ def _run(forms, program, defs) -> int:
 
 
 def _show(x) -> str:
+    """A stack item as Joy writes it."""
+    if isinstance(x, bool):
+        return "true" if x else "false"
     if isinstance(x, list):                       # interpreted quotation
-        return "[" + " ".join(str(w[1]) if isinstance(w, tuple) and w[0] == "Lit"
-                              else str(w) for w in x) + "]"
+        return "[" + " ".join(_word(w) for w in x) + "]"
     if isinstance(x, tuple) and x[0] == "quot":   # compiled: extensional
         ctor, stack = x[1]
         return "[" + (ctor if stack is None else " ".join(_show(y) for y in stack)) + "]"
+    if isinstance(x, tuple) and x[0] == "Sym":
+        return x[1]
+    if isinstance(x, tuple) and x[0] == "Char":
+        return _char(x[1])
+    if isinstance(x, tuple) and x[0] == "Str":
+        return _string(x[1])
     return str(x)
+
+
+def _word(w) -> str:
+    """An interpreted quotation's element as Joy writes it."""
+    if isinstance(w, str):
+        return joy.NAMES.get(w, w)
+    kind, v = w
+    if kind == "Lit":
+        return str(v)
+    if kind == "Truth":
+        return "true" if v else "false"
+    if kind == "Quote":
+        return "[" + " ".join(_word(u) for u in v) + "]"
+    if kind == "Glyph":
+        return _char(v)
+    if kind == "Text":
+        return _string(v)
+    return str(v)                                 # a Def, by its name
+
+
+def _char(c: int) -> str:
+    return f"'{chr(c)}" if 32 < c < 127 else f"'\\{c:03d}"
+
+
+def _string(s) -> str:
+    codes = [ord(c) for c in s] if isinstance(s, str) else list(s)
+    return '"' + "".join(chr(c) if 32 <= c < 127 and c not in (34, 92) else f"\\{c:03d}"
+                         for c in codes) + '"'
 
 
 if __name__ == "__main__":
