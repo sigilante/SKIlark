@@ -28,7 +28,7 @@ from . import joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 #: the directory holding the ``.ski`` sources
 DIR = pathlib.Path(__file__).parent / "programs"
@@ -74,16 +74,36 @@ class Run:
                 word = (w, self.number(wf[0]))
             elif w == "Truth":
                 word = (w, peel(wf[0], self.t["logical"], max_steps=STEPS)[0] == "True")
+            elif w == "Def":
+                word = (w, self.name(wf[0]))
             else:
                 word = (w, self.prog(wf[0]))
         return [word] + self.prog(fields[1])
 
     def symbol(self, term) -> str:
-        """A symbol by its word's constructor name: interpreted, the word
-        itself; compiled, the symbol ``Y<word>``."""
+        """A symbol by its Joy name: interpreted, its word's (a ``Def``'s
+        own); compiled, its constructor's (``YDup`` is ``dup``, ``Zsize``
+        is ``size``)."""
         if self.mode == "compiled":
-            return peel(term, self.t["sym"], max_steps=STEPS)[0][1:]
-        return peel(term, self.t["word"], max_steps=STEPS)[0]
+            return joy.symbol_name(peel(term, self.t["sym"], max_steps=STEPS)[0])
+        ctor, fields = peel(term, self.t["word"], max_steps=STEPS)
+        return self.name(fields[0]) if ctor == "Def" else joy.NAMES[ctor]
+
+    def name(self, term) -> str:
+        """A ``Def``'s name, from its ``named`` field."""
+        _, fields = peel(term, self.t["named"], max_steps=STEPS)
+        return self.text(fields[0])
+
+    def text(self, term) -> str:
+        """A name's ``text`` as a string: a letter is its place in the
+        alphabet, an operator sign 62 less its code, negated."""
+        out = []
+        ctor, fields = peel(term, self.t["text"], max_steps=STEPS)
+        while ctor == "TCons":
+            c = self.number(fields[0])
+            out.append(chr(96 + c if c > 0 else 63 + c))
+            ctor, fields = peel(fields[1], self.t["text"], max_steps=STEPS)
+        return "".join(out)
 
     def number(self, term) -> int:
         """A numeral: a natural, or where the program's numbers are integers
