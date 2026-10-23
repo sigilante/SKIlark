@@ -3,7 +3,7 @@
 minutes on the reference reducer, so they are ``slow`` (``--runslow``);
 their numbers are recorded in PLAN.md.  The compiled ones were measured
 on skijack 0.2.0 and hold on 0.2.1; the interpreted ones are the kernel's
-with Joy's stages 1 to 3, measured on 0.2.1, where Avon runs them in
+with Joy's stages 1 to 4, measured on 0.2.1, where Avon runs them in
 under a minute (``SKIJACK_REDUCER=avon``).  The fast tests below check the generated source and the reader.
 """
 
@@ -16,7 +16,7 @@ from skilark.joy import DEFINITIONS
 DEFS = dict(DEFINITIONS, sq="dup +")
 
 #: host contractions, measured once (PLAN.md section 1c)
-LEVEL1_IQ, LEVEL1_IP = (22_801_690, 22_840_006), (23_762_440, 23_801_764)
+LEVEL1_IQ, LEVEL1_IP = (30_226_536, 30_270_466), (31_304_568, 31_349_506)
 LEVEL1_CQ, LEVEL1_CP = (2_328_665, 2_342_964), (2_337_648, 2_351_954)
 READER_YES, READER_NO, READER_TQ, READER_TE, READER_TERR = 277_007, 284_677, 98_557, 33_204, 14_794
 READER_TL, READER_NEG, READER_SYM = 96_546, 118_916, 94_868

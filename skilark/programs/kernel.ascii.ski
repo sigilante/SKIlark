@@ -12,12 +12,20 @@
 -- are programs: the program's own names are its dictionary.
 -- Integers are signed and unbounded, a sign and a unary magnitude: `Pos m`
 -- is m and `Neg m` is -(m+1), so zero is only `Pos Zero`.
+-- Joy's behaviour is the reference implementation's (Wodan58/Joy): its
+-- tests take any value as a truth value, its comparisons order values of
+-- different kinds, and a symbol has a name, which `=` and `<` compare.
+-- A derived word inside a quotation is a `Def`, its name and its body: it
+-- runs as its body and is read, as an element, as the symbol it names.
 nat     === Zero | Suc nat
 int     === Pos nat | Neg nat
 logical === False | True
+order   === Less | Same | More
+text    === TNil | TCons int text
 item    === Num int | Quot prog | Logical logical | Sym word
 stack   === Empty | Push item stack
-word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit int | Quote prog | Add | Sub | Mul | Div | Rem | Eql | Lt | Truth logical | Branch | Ifte | Uncons | Null | Small | Choose stack
+named   === Named text prog
+word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit int | Quote prog | Add | Sub | Mul | Div | Rem | Eql | Lt | Truth logical | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Choose stack
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
 
@@ -44,41 +52,106 @@ times a b = signed (iff (isNeg a) (flip (isNeg b))) (mul (mag a) (mag b))
 -- division truncates toward zero and the remainder takes the dividend's sign
 divide a b = signed (iff (isNeg a) (flip (isNeg b))) (divN (mag a) (mag b))
 modulo a b = signed (isNeg a) (remN (mag a) (mag b))
-lessZ a b = a |> { Pos m (b |> { Pos n (less m n); Neg n False }); Neg m (b |> { Pos n True; Neg n (less n m) }) }
-sameZ a b = a |> { Pos m (b |> { Pos n (same m n); Neg n False }); Neg m (b |> { Pos n False; Neg n (same m n) }) }
--- Joy's null and small read a number as an aggregate of its size
+-- Joy's null and small read a number as an aggregate: null is zero, small
+-- is at most one (so every negative is small)
 zero z = z |> { Pos m (m |> { Zero True; Suc k False }); Neg m False }
-upToOne z = z |> { Pos m (m |> { Zero True; Suc k (k |> { Zero True; Suc j False }) }); Neg m False }
+upToOne z = z |> { Pos m (m |> { Zero True; Suc k (k |> { Zero True; Suc j False }) }); Neg m True }
+-- the reference's comparison (compare.h): two null values are the same;
+-- numbers and truth values (false 0, true 1) by value; symbols by name;
+-- anything else is More, in both orders
+cmpN m n = m |> { Zero (n |> { Zero Same; Suc j Less }); Suc i (n |> { Zero More; Suc j (cmpN i j) }) }
+cmpZ a b = a |> { Pos m (b |> { Pos n (cmpN m n); Neg n More }); Neg m (b |> { Pos n Less; Neg n (cmpN n m) }) }
+cmpT s t = s |> { TNil (t |> { TNil Same; TCons d u Less }); TCons c r (t |> { TNil More; TCons d u (cmpZ c d |> { Less Less; Same (cmpT r u); More More }) }) }
+both a b = a |> { False False; True b }
+boolZ b = b |> { False (Pos Zero); True (Pos n1) }
+nullish x = x |> { Num z (zero z); Quot r (r |> { Done True; Then w p False }); Logical b (flip b); Sym w False }
+cmpI nm x y = x |> { Num m (y |> { Num n (cmpZ m n); Quot r More; Logical c (cmpZ m (boolZ c)); Sym v More }); Quot r More; Logical b (y |> { Num n (cmpZ (boolZ b) n); Quot r More; Logical c (cmpZ (boolZ b) (boolZ c)); Sym v More }); Sym w (y |> { Num n More; Quot r More; Logical c More; Sym v (cmpT (nm w) (nm v)) }) }
+compare x y = both (nullish x) (nullish y) |> { True Same; False (cmpI nameOf x y) }
+isSame o = o |> { Less False; Same True; More False }
+isLess o = o |> { Less True; Same False; More False }
+-- the reference's truth value of any value (boolean.h): zero and empty
+-- are false, a symbol is true
+truth x = x |> { Num z (flip (zero z)); Quot r (r |> { Done False; Then w p True }); Logical b b; Sym w True }
 cat p q = p |> { Done q; Then w r (Then w (cat r q)) }
 -- a quotation's element as an item, and back: a literal is its value, any
 -- other word a symbol
-itemOf w = w |> { Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit n (Num n); Quote r (Quot r); Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Truth b (Logical b); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Choose v (Sym w) }
+itemOf w = w |> { Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit n (Num n); Quote r (Quot r); Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Truth b (Logical b); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Stack (Sym w); Unstack (Sym w); Def d (Sym w); Choose v (Sym w) }
 wordOf a = a |> { Num n (Lit n); Quot r (Quote r); Logical b (Truth b); Sym w w }
--- a word's place in the sum, so that = compares two symbols by name
-w1 := Suc Zero
-w2 := Suc w1
-w3 := Suc w2
-w4 := Suc w3
-w5 := Suc w4
-w6 := Suc w5
-w7 := Suc w6
-w8 := Suc w7
-w9 := Suc w8
-w10 := Suc w9
-w11 := Suc w10
-w12 := Suc w11
-w13 := Suc w12
-w14 := Suc w13
-w15 := Suc w14
-w16 := Suc w15
-w17 := Suc w16
-w18 := Suc w17
-w19 := Suc w18
-w20 := Suc w19
-w21 := Suc w20
-w22 := Suc w21
-w23 := Suc w22
-wordNo w = w |> { Dup Zero; Swap w1; Pop w2; Qcons w3; Cat w4; Unit w5; Dip w6; Do w7; Lit n w8; Quote r w9; Add w10; Sub w11; Mul w12; Div w13; Rem w14; Eql w15; Lt w16; Truth b w17; Branch w18; Ifte w19; Uncons w20; Null w21; Small w22; Choose v w23 }
+-- the words that push an item back: a symbol's word would run, so a
+-- symbol comes back as the first element of a quotation of it
+pushBack a q = a |> { Num n (Then (Lit n) q); Quot r (Then (Quote r) q); Logical b (Then (Truth b) q); Sym w (Then (Quote (Then w Done)) (Then Uncons (Then Pop q))) }
+-- the stack as a list, top first, and a list as the stack
+toProg s = s |> { Empty Done; Push a t (Then (wordOf a) (toProg t)) }
+fromProg r = r |> { Done Empty; Then w p (Push (itemOf w) (fromProg p)) }
+-- names: a symbol's name, so that = and < compare two symbols as the
+-- reference does, by name (a literal's word is never a symbol, and Choose
+-- never stands in a quotation).  A name's characters are in a code that
+-- keeps their order and costs little: a letter is its place in the
+-- alphabet, an operator sign 62 less its character code, negated
+n1 := Suc Zero
+n2 := Suc n1
+n3 := Suc n2
+n4 := Suc n3
+n5 := Suc n4
+n6 := Suc n5
+n7 := Suc n6
+n8 := Suc n7
+n9 := Suc n8
+n10 := Suc n9
+n11 := Suc n10
+n12 := Suc n11
+n13 := Suc n12
+n14 := Suc n13
+n15 := Suc n14
+n16 := Suc n15
+n17 := Suc n16
+n18 := Suc n17
+n19 := Suc n18
+n20 := Suc n19
+n21 := Suc n20
+n22 := Suc n21
+n23 := Suc n22
+n24 := Suc n23
+n25 := Suc n24
+n26 := Suc n25
+n27 := Suc n26
+n28 := Suc n27
+n29 := Suc n28
+ca := Pos n1
+cb := Pos n2
+cc := Pos n3
+cd := Pos n4
+ce := Pos n5
+cf := Pos n6
+cg := Pos n7
+ch := Pos n8
+ci := Pos n9
+cj := Pos n10
+ck := Pos n11
+cl := Pos n12
+cm := Pos n13
+cn := Pos n14
+co := Pos n15
+cp := Pos n16
+cq := Pos n17
+cr := Pos n18
+cs := Pos n19
+ct := Pos n20
+cu := Pos n21
+cv := Pos n22
+cw := Pos n23
+cx := Pos n24
+cy := Pos n25
+cz := Pos n26
+cBang := Neg n29
+cPlus := Neg n19
+cMinus := Neg n17
+cStar := Neg n20
+cSlash := Neg n15
+cLt := Neg n2
+cEq := Neg n1
+cGt := Neg Zero
+nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit n TNil; Quote r TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Truth b TNil; Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n }); Choose v TNil }
 
 -- the words' results, x below y on the stack
 addI n m = Num (plus n m)
@@ -86,7 +159,6 @@ subI n m = Num (plus n (minus m))
 mulI n m = Num (times n m)
 divI n m = Num (divide n m)
 remI n m = Num (modulo n m)
-lessI n m = Logical (lessZ n m)
 -- a word of two numbers, and of two with a nonzero divisor
 num2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (f n m) u)); Quot r RErr; Logical c RErr; Sym y RErr }); Quot r RErr; Logical c RErr; Sym y RErr }) }) }
 div2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (mag m |> { Zero RErr; Suc k (ex q (Push (f n m) u)) }); Quot r RErr; Logical c RErr; Sym y RErr }); Quot r RErr; Logical c RErr; Sym y RErr }) }) }
@@ -98,17 +170,18 @@ div2 f ex q s = s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> {
 exec f p s = f loop timeout p s
 loop ex p s = p |> { Done (RVal s); Then w q (step ex w q s) }
 timeout p s = RTime
--- ifte runs its test on the stack, then Choose takes the truth value it
--- left and, from the stack it saved with the two branches on top,
--- restores the stack and splices the branch it picks
-step ex w q s = w |> {
+-- ifte runs its test on the stack, then Choose takes the value it left as
+-- a truth value and, from the stack it saved with the two branches on
+-- top, restores the stack and splices the branch it picks
+step ex w q s = steps compare ex w q s
+steps cmp ex w q s = w |> {
   Dup     (s |> { Empty RErr; Push a t (ex q (Push a (Push a t))) });
   Swap    (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push b (Push a u))) }) });
   Pop     (s |> { Empty RErr; Push a t (ex q t) });
   Qcons   (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex q (Push (Quot (Then (wordOf b) r)) u)) }); Logical c RErr; Sym y RErr }) });
   Cat     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (b |> { Num m RErr; Quot l (ex q (Push (Quot (cat l r)) u)); Logical c RErr; Sym y RErr }) }); Logical c RErr; Sym y RErr }) });
   Unit    (s |> { Empty RErr; Push a t (ex q (Push (Quot (Then (wordOf a) Done)) t)) });
-  Dip     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex (cat r (Then (wordOf b) q)) u) }); Logical c RErr; Sym y RErr }) });
+  Dip     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex (cat r (pushBack b q)) u) }); Logical c RErr; Sym y RErr }) });
   Do      (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex (cat r q) t); Logical c RErr; Sym y RErr }) });
   Lit n   (ex q (Push (Num n) s));
   Quote r (ex q (Push (Quot r) s));
@@ -117,21 +190,24 @@ step ex w q s = w |> {
   Mul     (num2 mulI ex q s);
   Div     (div2 divI ex q s);
   Rem     (div2 remI ex q s);
-  Eql     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (a |> { Num m (b |> { Num n (ex q (Push (Logical (sameZ n m)) u)); Quot r RErr; Logical c RErr; Sym z RErr }); Quot r RErr; Logical d (b |> { Num n RErr; Quot r RErr; Logical c (ex q (Push (Logical (iff c d)) u)); Sym z RErr }); Sym y (b |> { Num n RErr; Quot r RErr; Logical c RErr; Sym z (ex q (Push (Logical (same (wordNo z) (wordNo y))) u)) }) }) }) });
-  Lt      (num2 lessI ex q s);
+  Eql     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push (Logical (isSame (cmp b a))) u)) }) });
+  Lt      (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push (Logical (isLess (cmp b a))) u)) }) });
   Truth b (ex q (Push (Logical b) s));
-  Branch  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l RErr; Logical d (d |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Sym y RErr }) }); Logical d RErr; Sym y RErr }) }); Logical d RErr; Sym y RErr }) });
+  Branch  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (truth c |> { False (ex (cat f q) v); True (ex (cat r q) v) }) }); Logical d RErr; Sym y RErr }) }); Logical d RErr; Sym y RErr }) });
   Ifte    (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l (ex (cat l (Then (Choose (Push (Quot f) (Push (Quot r) v))) q)) v); Logical d RErr; Sym y RErr }) }); Logical d RErr; Sym y RErr }) }); Logical d RErr; Sym y RErr }) });
   Uncons  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (r |> { Done RErr; Then x p (ex q (Push (Quot p) (Push (itemOf x) t))) }); Logical c RErr; Sym y RErr }) });
-  Null    (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Logical (zero n)) t)); Quot r (ex q (Push (Logical (r |> { Done True; Then x p False })) t)); Logical c RErr; Sym y RErr }) });
-  Small   (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Logical (upToOne n)) t)); Quot r (ex q (Push (Logical (r |> { Done True; Then x p (p |> { Done True; Then x o False }) })) t)); Logical c RErr; Sym y RErr }) });
-  Choose w (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot l RErr; Logical d (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (d |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr }) }); Logical e RErr; Sym g RErr }) }); Sym g RErr }) }) }
+  Null    (s |> { Empty RErr; Push a t (ex q (Push (Logical (nullish a)) t)) });
+  Small   (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Logical (upToOne n)) t)); Quot r (ex q (Push (Logical (r |> { Done True; Then x p (p |> { Done True; Then x o False }) })) t)); Logical c (ex q (Push (Logical True) t)); Sym y RErr }) });
+  Stack   (ex q (Push (Quot (toProg s)) s));
+  Unstack (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (fromProg r)); Logical c RErr; Sym y RErr }) });
+  Def d   (d |> { Named n b (ex (cat b q) s) });
+  Choose w (s |> { Empty RErr; Push a t (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (truth a |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr }) }); Logical e RErr; Sym g RErr }) }) }) }
 
 -- The same loop without fuel, for level 1: there the interpreter's
 -- fuel bounds the run, so the object program needs none of its own.
 execU p s = p |> { Done (RVal s); Then w q (step execU w q s) }
 
--- fuel: Church numerals, f applied n times; fuel is 200
+-- fuel: Church numerals, f applied n times; fuel is 1,000 words, room
+-- for the derived combinators, which spend tens of words a level
 ten f x    = f (f (f (f (f (f (f (f (f (f x)))))))))
-twenty f x = ten f (ten f x)
-fuel f x   = ten (twenty f) x
+fuel f x   = ten (ten (ten f)) x
