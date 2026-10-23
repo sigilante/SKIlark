@@ -8,7 +8,7 @@ and reads their data back behaviourally.
 
     >>> from skilark import Joy, interpreted, compiled
     >>> Joy().run("r1")                              # 1 2 + dup +
-    (('RVal', [6]), 9276)
+    (('RVal', [6]), 2003)
     >>> compiled({"p": "1 2 + dup +"}).run("up")     # no interpreter present
     (('RVal', [6]), 493)
 """
@@ -28,7 +28,7 @@ from . import joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 #: the directory holding the ``.ski`` sources
 DIR = pathlib.Path(__file__).parent / "programs"
@@ -179,7 +179,8 @@ class Joy(Run):
         super().__init__(read("joy", lexicon), "interpreted", lexicon)
 
     def exec(self, prog_name: str, fuel: str = "fuel") -> Outcome:
-        """``exec <fuel> <prog> Empty``, built here rather than declared."""
+        """``exec <fuel> <prog> Empty``, built here rather than declared;
+        ``fuel`` names a Church numeral (``fuel`` is 200, ``ten`` 10)."""
         e = self.e
         term = App(App(App(e.terms["exec"], e.terms[fuel]), e.terms[prog_name]),
                    e.terms["Empty"])

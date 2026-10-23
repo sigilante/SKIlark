@@ -2,11 +2,11 @@
 
 The kernel (``programs/kernel.ascii.ski``) runs a program by a fold that
 *splices*: ``Do``, ``Dip`` and ``Ifz`` copy their quotation onto the
-front of the continuation with ``cat``.  Its fuel is a Scott numeral,
-``fuel := mul ten (add ten ten)``, decremented once per word.  This module
-builds the same kernel with either piece replaced and runs the phase-2
-programs through each, so the costs compare on the same programs and the
-same reducer.
+front of the continuation with ``cat``.  Its fuel is a Church numeral,
+the loop's body applied 200 times.  This module builds the same kernel
+with either piece replaced, including the Scott numeral the kernel had
+before, and runs the phase-2 programs through each, so the costs compare
+on the same programs and the same reducer.
 
 Loops, each with the kernel's words and errors:
 
@@ -23,15 +23,16 @@ Loops, each with the kernel's words and errors:
 Fuel, one unit per word in every form:
 
 ``computed``
-    the kernel's own, ``mul ten (add ten ten)``.
+    the kernel's before Church fuel: a Scott numeral computed as
+    ``mul ten (add ten ten)``, decremented once per word (``execS``).
 ``literal``
-    the same numeral written out, ``Suc (Suc ... Zero)``.
+    the same Scott numeral written out, ``Suc (Suc ... Zero)``.
 ``church``
-    no numeral: the loop's body applied 200 times, ``c200 loopC timeC``,
-    so a word costs one unfolding and nothing is decremented.  Only the
-    splice loop takes it: the sequenced loop returns the fuel left in its
-    result, and Church fuel left is a function, where the kernel keeps
-    every field first-order.
+    the kernel's own: no numeral, the loop's body applied 200 times
+    (``exec fuel``), so a word costs one unfolding and nothing is
+    decremented.  Only the splice loop takes it: the sequenced loop
+    returns the fuel left in its result, and Church fuel left is a
+    function, where the kernel keeps every field first-order.
 
 ``python -m skilark.variants`` prints the tables ``PLAN.md`` §3 records;
 ``tests/test_variants.py`` pins them.
@@ -39,6 +40,7 @@ Fuel, one unit per word in every form:
 
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Optional, Tuple
 
 from . import Run, joy
@@ -112,26 +114,26 @@ toR r = r |> { FVal s h (RVal s); FErr RErr; FTime RTime }
             "(seqU ex (ex z v) q)", "(seqU ex (ex sc (Push (Num m) v)) q)") \
     + _SEQUENCED_F.replace("RErr", "FErr")
 
-LITERAL = f"fuelL := {nat(FUEL)}\n"
-
-CHURCH = """
--- fuel as a Church numeral: the loop's body, applied 200 times
-loopC k p s = p |> { Done (RVal s); Then w q (step k w q s) }
-timeC p s = RTime
-""" + church(10) + """c20 f x = c10 f (c10 f x)
-c200 f x = c10 (c20 f) x
-execC := c200 loopC timeC
+SCOTT = """
+-- the kernel's fuel before Church numerals: a Scott numeral, computed
+-- as it is consumed, one unit per word
+mul m n = n |> { Zero Zero; Suc k (add m (mul m k)) }
+tenS  := add five five
+fuelS := mul tenS (add tenS tenS)
+execS f p s = f |> { Zero RTime; Suc g (p |> { Done (RVal s); Then w q (step (execS g) w q s) }) }
 """
+
+LITERAL = f"fuelL := {nat(FUEL)}\n"
 
 #: (loop, fuel) -> (source added to the kernel, the fuelled run, the unfuelled run)
 INTERPRETED: Dict[Tuple[str, str], Tuple[str, str, Optional[str]]] = {
-    ("splice", "computed"):    ("", "exec fuel {p} Empty", "execU {p} Empty"),
-    ("splice", "literal"):     (LITERAL, "exec fuelL {p} Empty", None),
-    ("splice", "church"):      (CHURCH, "execC {p} Empty", None),
-    ("stack", "computed"):     (STACK, "execK fuel {p} Halt Empty", "execKU {p} Halt Empty"),
-    ("stack", "literal"):      (STACK + LITERAL, "execK fuelL {p} Halt Empty", None),
-    ("sequenced", "computed"): (SEQUENCED, "toR (execF fuel {p} Empty)", "execN {p} Empty"),
-    ("sequenced", "literal"):  (SEQUENCED + LITERAL, "toR (execF fuelL {p} Empty)", None),
+    ("splice", "computed"):    (SCOTT, "execS fuelS {p} Empty", "execU {p} Empty"),
+    ("splice", "literal"):     (SCOTT + LITERAL, "execS fuelL {p} Empty", None),
+    ("splice", "church"):      ("", "exec fuel {p} Empty", None),
+    ("stack", "computed"):     (SCOTT + STACK, "execK fuelS {p} Halt Empty", "execKU {p} Halt Empty"),
+    ("stack", "literal"):      (SCOTT + STACK + LITERAL, "execK fuelL {p} Halt Empty", None),
+    ("sequenced", "computed"): (SCOTT + SEQUENCED, "toR (execF fuelS {p} Empty)", "execN {p} Empty"),
+    ("sequenced", "literal"):  (SCOTT + SEQUENCED + LITERAL, "toR (execF fuelL {p} Empty)", None),
 }
 
 
@@ -151,30 +153,31 @@ def interpreted(loop: str, fuel: str, programs: Dict[str, str] = PROGRAMS) -> Ru
 
 def compiled(fuel: str, programs: Dict[str, str] = PROGRAMS) -> Run:
     """The compiled form with ``fuel`` in its eliminator: ``rP`` fuelled,
-    ``uP`` unfuelled, as ``skilark.compiled`` declares them."""
+    ``uP`` unfuelled, as ``skilark.compiled`` declares them.  ``church``
+    is the compiled form itself; the Scott fuels run ``applyS``, the
+    eliminator as it was before Church fuel."""
     src = joy.compiled(programs)
-    if fuel == "computed":
+    if fuel == "church":
         return Run(src, "compiled")
-    if fuel == "literal":
-        old = "fuel  := mul ten (add ten ten)"
-        if old not in src:
-            raise ValueError(f"the compiled kernel has no {old!r}")
-        return Run(src.replace(old, f"fuel  := {nat(FUEL)}"), "compiled")
-    if fuel != "church":
+    if fuel not in ("computed", "literal"):
         raise ValueError(f"unknown fuel {fuel!r}")
-    # applyC k: apply's cases with the next fuel level k for (apply g)
-    a = src.index("apply f q s = ")
+    # applyS f: applyK's cases, with the next fuel level (applyS g) for k
+    a = src.index("applyK k q s = ")
     line = src[a:src.index("\n", a)]
-    cases = line[line.index("(q |> {") + len("(q |> {"):line.rindex("})")]
-    cases = cases.replace("(apply g)", "k").replace("apply g ", "k ")
-    src += ("\n-- fuel as a Church numeral: apply's cases, applied 200 times\n"
-            f"applyC k q s = q |> {{{cases}}}\n"
-            "timeQ q s = RTime\n" + church(10) +
-            "c20 f x = c10 f (c10 f x)\nc200 f x = c10 (c20 f) x\n"
-            "applyFC := c200 applyC timeQ\n")
+    cases = line[line.index("q |> {") + len("q |> {"):line.rindex("}")]
+    cases = re.sub(r"\bk\b", "(applyS g)", cases)
+    numeral = ("fuelS := mul tenS (add tenS tenS)" if fuel == "computed"
+               else f"fuelS := {nat(FUEL)}")
+    src += ("\n-- the eliminator before Church fuel: a Scott numeral, one unit per apply\n"
+            "mul m n = n |> { Zero Zero; Suc k (add m (mul m k)) }\n"
+            "tenS  := add five five\n"
+            f"{numeral}\n"
+            f"applyS f q s = f |> {{ Zero RTime; Suc g (q |> {{{cases}}}) }}\n")
     for name in programs:
-        src = src.replace(f"r{name} := c{name} (apply fuel) Empty",
-                          f"r{name} := c{name} applyFC Empty")
+        old = f"r{name} := c{name} (apply fuel) Empty"
+        if old not in src:
+            raise ValueError(f"the compiled form has no {old!r}")
+        src = src.replace(old, f"r{name} := c{name} (applyS fuelS) Empty")
     return Run(src, "compiled")
 
 

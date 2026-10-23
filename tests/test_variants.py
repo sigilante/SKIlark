@@ -1,6 +1,7 @@
 """Phase 3: the kernel's loop and fuel in variants (``skilark.variants``),
 pinned on the phase-2 programs.  Every count is host contractions on
 skijack 0.2.1; ``PLAN.md`` §3 records the tables and the decisions.
+Church fuel is the kernel's; the Scott fuels are what it had before.
 """
 
 import pytest
@@ -10,11 +11,13 @@ from skilark import variants as V
 from skilark.joy import DEFINITIONS, _programs, datum, nat
 from test_modes import COMPILED, INTERPRETED
 
-#: (loop, fuel) -> fuelled count per program, p1 .. p8
+#: (loop, fuel) -> fuelled count per program, p1 .. p8.  The splice with
+#: computed fuel is the kernel before Church fuel, and its row is the
+#: counts phase 2 pinned then.
 FUELLED = {
     ("splice", "computed"):    (9_276, 9_291, 11_601, 14_030, 7_820, 3_385, 110_770, 173_744),
     ("splice", "literal"):     (2_298, 2_313, 2_973, 3_725, 1_663, 325, 35_171, 54_449),
-    ("splice", "church"):      (1_994, 2_009, 2_550, 3_184, 1_417, 286, 29_572, 44_546),
+    ("splice", "church"):      (2_003, 2_018, 2_561, 3_197, 1_425, 290, 29_641, 44_647),
     ("stack", "computed"):     (10_475, 11_313, 14_090, 17_850, 8_741, 3_575, 138_784, 217_546),
     ("stack", "literal"):      (3_497, 3_514, 4_641, 5_894, 2_584, 515, 48_646, 75_089),
     ("sequenced", "computed"): (9_980, 10_802, 12_115, 15_777, 8_340, 3_496, 126_765, 196_614),
@@ -26,11 +29,12 @@ UNFUELLED = {
     "stack":     (2_978, 2_914, 3_858, 4_858, 2_156, 428, 41_770, 64_809),
     "sequenced": (2_014, 1_958, 2_299, 2_967, 1_429, 276, 28_042, 43_256),
 }
-#: fuel -> the compiled form's fuelled count per program
+#: fuel -> the compiled form's fuelled count per program; computed is the
+#: compiled form before Church fuel
 COMPILED_FUELLED = {
     "computed": (493, 3_164, 3_254, 6_074, 264, 6, 40_594, 63_921),
     "literal":  (493, 667, 757, 1_080, 264, 6, 15_414, 23_603),
-    "church":   (493, 546, 636, 840, 264, 6, 11_478, 17_369),
+    "church":   (493, 550, 640, 848, 264, 6, 11_508, 17_413),
 }
 
 
@@ -45,9 +49,13 @@ def test_every_loop_and_fuel_gives_the_kernels_outcomes(loop, fuel):
             assert u == UNFUELLED[loop][i], (p, u)
 
 
-def test_the_splice_with_computed_fuel_is_the_kernel():
-    t = V.table(V.interpreted("splice", "computed"))
-    assert {p: (o, u, n) for p, (o, n, u) in t.items()} == INTERPRETED
+def test_the_splice_with_church_fuel_is_the_kernel():
+    t = V.table(V.interpreted("splice", "church"))
+    assert {p: (o, n) for p, (o, n, u) in t.items()} == \
+        {p: (o, n) for p, (o, u, n) in INTERPRETED.items()}
+    t = V.table(V.compiled("church"))
+    assert {p: (o, n) for p, (o, n, u) in t.items()} == \
+        {p: (o, n) for p, (o, u, n) in COMPILED.items()}
 
 
 @pytest.mark.parametrize("fuel", list(COMPILED_FUELLED))
@@ -64,15 +72,13 @@ def test_church_fuel_times_out_where_scott_fuel_does():
     same word: one unit per word, and one at ``Done``."""
     progs = {"p1": "1 2 + dup +", "p7": "3 sumto", "loop": "[dup i] dup i"}
     ns = (5, 6, 65, 66)
-    src = [joy._kernel(),
-           "loopC k p s = p |> { Done (RVal s); Then w q (step k w q s) }\n"
-           "timeC p s = RTime\n"]
+    src = [joy._kernel(), V.SCOTT]
     src += [V.church(n) + f"f{n} := {nat(n)}\n" for n in ns]
     for name, prog in _programs(progs, DEFINITIONS).items():
         src.append(f"p{name} := {datum(prog)}\n")
         for n in ns:
-            src.append(f"s{name}x{n} := exec f{n} p{name} Empty\n")
-            src.append(f"c{name}x{n} := c{n} loopC timeC p{name} Empty\n")
+            src.append(f"s{name}x{n} := execS f{n} p{name} Empty\n")
+            src.append(f"c{name}x{n} := exec c{n} p{name} Empty\n")
     r = Run("".join(src), "interpreted")
     seen = {}
     for name in progs:

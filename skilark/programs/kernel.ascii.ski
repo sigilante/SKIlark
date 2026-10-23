@@ -15,14 +15,17 @@ prog   === Done | Then word prog
 result === RVal stack | RErr | RTime
 
 add m n = n |> { Zero m; Suc k (Suc (add m k)) }
-mul m n = n |> { Zero Zero; Suc k (add m (mul m k)) }
 cat p q = p |> { Done q; Then w r (Then w (cat r q)) }
 -- the word that pushes an item back: cons, unit and dip re-quote a datum
 wordOf a = a |> { Num n (Lit n); Quot r (Quote r) }
 
--- One unit of fuel per word.  step takes the loop as a parameter: the
--- expander ties one fixpoint per equation and refuses mutual recursion.
-exec f p s = f |> { Zero RTime; Suc g (p |> { Done (RVal s); Then w q (step (exec g) w q s) }) }
+-- Fuel is a Church numeral: exec f runs at most f words, each one
+-- unfolding of the loop's body (Done takes one more), and nothing is
+-- decremented.  step takes the loop as a parameter: the expander ties
+-- one fixpoint per equation and refuses mutual recursion.
+exec f p s = f loop timeout p s
+loop ex p s = p |> { Done (RVal s); Then w q (step ex w q s) }
+timeout p s = RTime
 step ex w q s = w |> {
   Dup     (s |> { Empty RErr; Push a t (ex q (Push a (Push a t))) });
   Swap    (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push b (Push a u))) }) });
@@ -45,5 +48,7 @@ one   := Suc Zero
 two   := Suc one
 three := Suc two
 five  := add two three
-ten   := add five five
-fuel  := mul ten (add ten ten)
+-- fuel: Church numerals, f applied n times; fuel is 200
+ten f x    = f (f (f (f (f (f (f (f (f (f x)))))))))
+twenty f x = ten f (ten f x)
+fuel f x   = ten (twenty f) x

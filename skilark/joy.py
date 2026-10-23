@@ -168,7 +168,6 @@ quot   === {QUOTS}QCons item quot | QUnit item | QThen quot
 result === RVal stack | RErr | RTime
 
 add m n = n |> {{ Zero m; Suc k (Suc (add m k)) }}
-mul m n = n |> {{ Zero Zero; Suc k (add m (mul m k)) }}
 
 -- composition, threading the result
 seq f g s = f s |> {{ RVal t (g t); RErr RErr; RTime RTime }}
@@ -191,11 +190,16 @@ wAdd s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num
 one   := Suc Zero
 two   := Suc one
 five  := Suc (Suc (Suc two))
-ten   := add five five
-fuel  := mul ten (add ten ten)
+-- fuel: Church numerals, f applied n times; fuel is 200
+ten f x    = f (f (f (f (f (f (f (f (f (f x)))))))))
+twenty f x = ten f (ten f x)
+fuel f x   = ten (twenty f) x
 
--- the eliminator of quot: Joy's i is one case; fuel is one unit per apply
-apply f q s = f |> {{ Zero RTime; Suc g (q |> {{ {CASES_F}QCons x r (apply g r (Push x s)); QUnit x (RVal (Push x s)); QThen b (seq (wDo (apply g)) (apply g b) s) }}) }}
+-- the eliminator of quot: Joy's i is one case.  Fuel is a Church numeral,
+-- one unfolding of applyK per quotation applied, k the next
+apply f q s = f applyK timeout q s
+applyK k q s = q |> {{ {CASES_F}QCons x r (k r (Push x s)); QUnit x (RVal (Push x s)); QThen b (seq (wDo k) (k b) s) }}
+timeout q s = RTime
 applyU q s = q |> {{ {CASES_U}QCons x r (applyU r (Push x s)); QUnit x (RVal (Push x s)); QThen b (seq (wDo applyU) (applyU b) s) }}
 """
 
@@ -239,7 +243,8 @@ class _Compiler:
 def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
              ) -> str:
     """For each program ``p``: ``cP`` (its body, taking the eliminator),
-    ``rP`` (under ``apply fuel``) and ``uP`` (under ``applyU``)."""
+    ``rP`` (under ``apply fuel``, ``fuel`` a Church numeral) and ``uP``
+    (under ``applyU``)."""
     c = _Compiler()
     progs = _programs(programs, defs)
     tops = {name: c.body(prog) for name, prog in progs.items()}
@@ -251,7 +256,7 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     n = len(c.quots)
     kernel = COMPILED_KERNEL.format(
         QUOTS="".join(f"Q{k} | " for k in range(1, n + 1)),
-        CASES_F="".join(f"Q{k} (b{k} (apply g) s); " for k in range(1, n + 1)),
+        CASES_F="".join(f"Q{i} (b{i} k s); " for i in range(1, n + 1)),
         CASES_U="".join(f"Q{k} (b{k} applyU s); " for k in range(1, n + 1)))
     out = [kernel, "\n-- static quotations, hoisted\n"]
     out.extend(f"{b}\n" for b in bodies)
@@ -349,7 +354,7 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
         n = len(c.quots)
         kernel = COMPILED_KERNEL.format(
             QUOTS="".join(f"Q{k} | " for k in range(1, n + 1)),
-            CASES_F="".join(f"Q{k} (b{k} (apply g) s); " for k in range(1, n + 1)),
+            CASES_F="".join(f"Q{i} (b{i} k s); " for i in range(1, n + 1)),
             CASES_U="".join(f"Q{k} (b{k} applyU s); " for k in range(1, n + 1)))
     else:
         raise ValueError(f"unknown form {form!r}")

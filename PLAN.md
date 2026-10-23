@@ -6,7 +6,8 @@
 > end in three forms; `skilark/variants.py` is the kernel's loop and fuel
 > in variants; `tests/` pins every number in §1 and §3 (the level-1 runs
 > under `--runslow`). Phase 3 closed with a decision on `Do` and one on
-> fuel; Phase 4 is a short write-up, after the kernel takes Church fuel.
+> fuel, and the kernel's fuel is now a Church numeral; Phase 4 is a short
+> write-up.
 > Where this document and the tests differ, the tests are authoritative.
 
 *A concatenative language in the line of Joy (von Thun) and Kerby's* Theory
@@ -73,34 +74,40 @@ primitive and no self-naming word.
 `joy.ascii.ski` is Joy's kernel, first-order: `dup swap pop cons cat unit
 dip i` (as `Do`, since `I` is reserved for the combinator), literals,
 quotations, `ifz` and `+`. `exec` takes fuel, one unit per word, and
-returns `RTime` when it runs out. Derived words are SKIjack equations whose
+returns `RTime` when it runs out. The fuel is a Church numeral: `exec f`
+is `f loop timeout`, the loop's body applied `f` times, so nothing is
+decremented (§3 measures why). Derived words are SKIjack equations whose
 values are programs. Stage A and Stage B are clean; both lexicons compile
-to the same 85 terms. Sizes (atoms):
+to the same 88 terms. Sizes (atoms):
 
 | term | atoms |
 |---|---|
-| `exec` (the fuelled loop, with `step` inlined) | 2,538 |
+| `exec` (the fuelled run, with `loop` and `step` inlined) | 2,488 |
+| `loop` (one word, the next level a parameter) | 2,478 |
 | `step` | 2,428 |
 | `sumto` (`[swap [pop 0] [dup [swap i] dip 1 + +] ifz] y`) | 1,178 |
-| `fuel` (the numeral 200) | 749 |
 | `yComb`, Kerby's `y` | 399 |
 | `over`, `tuck`, `rot`, `sip`, `kComb`, `nip` | 209, 209, 207, 199, 193, 154 |
-| `wordOf`, `mul`, `cat`, `add` | 87, 77, 69, 42 |
+| `fuel` (the Church numeral 200), `twenty`, `ten` | 147, 99, 46 |
+| `wordOf`, `cat`, `add` | 87, 69, 42 |
 
 Programs, read behaviourally with `peel` and `Prober.read_nat`; stacks are
 written bottom to top:
 
 | | Joy | contractions | result |
 |---|---|---|---|
-| `r1` | `1 2 + dup +` | 9,276 | `6` |
-| `r2` | `3 [dup +] i` | 9,291 | `6` |
-| `r3` | `1 2 over` | 11,601 | `1 2 1` |
-| `r4` | `1 [2] [3] k` | 14,030 | `1 3` |
-| `r5` | `1 2 unit cons` | 7,820 | `[1 2]` |
-| `r6` | `+` on the empty stack | 3,385 | `RErr` |
-| `r7` | `3 sumto` | 110,770 | `6` |
-| `r8` | `5 sumto` | 173,876 | `15` |
-| `r8starved` | `5 sumto` with fuel 10 | 4,839 | `RTime` |
+| `r1` | `1 2 + dup +` | 2,003 | `6` |
+| `r2` | `3 [dup +] i` | 2,018 | `6` |
+| `r3` | `1 2 over` | 2,561 | `1 2 1` |
+| `r4` | `1 [2] [3] k` | 3,197 | `1 3` |
+| `r5` | `1 2 unit cons` | 1,425 | `[1 2]` |
+| `r6` | `+` on the empty stack | 290 | `RErr` |
+| `r7` | `3 sumto` | 29,641 | `6` |
+| `r8` | `5 sumto` | 44,779 | `15` |
+| `r8starved` | `5 sumto` with fuel 10 | 3,772 | `RTime` |
+
+With the Scott numeral the kernel had until §3's measurements, the same
+runs cost 9,276 to 173,876 (`r6` 3,385): fuel was most of every count.
 
 Eight laws hold, each as two declared programs run to the same stack:
 
@@ -120,7 +127,8 @@ Two findings from building it:
 1. **The expander refuses mutual recursion** ("ties one fixpoint per
    equation"). `exec` and `step` are mutually recursive in the natural
    writing, so `step` takes the loop as a parameter, `step ex w q s`, and
-   only `exec` is recursive. Lifting the restriction is a `skijack`
+   only `execU` is recursive. The fuelled `exec` recurses not at all: its
+   levels are the Church numeral's unfoldings. Lifting the restriction is a `skijack`
    change with its own tests, not a SKIlark task.
 2. **Case branches are `;`-separated and the closing brace follows the last
    branch**; a newline before `}` is a parse error. Cosmetic, but every
@@ -140,23 +148,27 @@ programs, host contractions, unfuelled (`uP`) and fuelled (`rP`):
 
 | Joy | result | interpreted | fuelled | compiled | fuelled |
 |---|---|---|---|---|---|
-| `1 2 + dup +` | `6` | 2,014 | 9,276 | 493 | 493 |
-| `3 [dup +] i` | `6` | 2,029 | 9,291 | 536 | 3,164 |
-| `1 2 over` | `1 2 1` | 2,589 | 11,601 | 626 | 3,254 |
-| `1 [2] [3] k` | `1 3` | 3,250 | 14,030 | 820 | 6,074 |
-| `1 2 unit cons` | `[1 2]` | 1,429 | 7,820 | 264 | 264 |
-| `+` (empty stack) | `RErr` | 276 | 3,385 | 6 | 6 |
-| `3 sumto` | `6` | 31,890 | 110,770 | 11,847 | 40,594 |
-| `5 sumto` | `15` | 49,568 | 173,744 | 18,186 | 63,921 |
+| `1 2 + dup +` | `6` | 2,014 | 2,003 | 493 | 493 |
+| `3 [dup +] i` | `6` | 2,029 | 2,018 | 536 | 550 |
+| `1 2 over` | `1 2 1` | 2,589 | 2,561 | 626 | 640 |
+| `1 [2] [3] k` | `1 3` | 3,250 | 3,197 | 820 | 848 |
+| `1 2 unit cons` | `[1 2]` | 1,429 | 1,425 | 264 | 264 |
+| `+` (empty stack) | `RErr` | 276 | 290 | 6 | 6 |
+| `3 sumto` | `6` | 31,890 | 29,641 | 11,847 | 11,508 |
+| `5 sumto` | `15` | 49,568 | 44,647 | 18,186 | 17,413 |
 
 Fuel is one unit per word interpreted and one per quotation applied
-compiled, so the two fuelled columns bound different things; the
-unfuelled columns are the comparison, and the compiled form costs
+compiled, so the two fuelled columns bound different things. With Church
+fuel a fuelled run costs about what the unfuelled one does: up to 28
+contractions more on the short programs, which pay for the numeral and
+save little a word, and up to 10% less on the longest, where an
+unfolding is cheaper than `execU`'s recursion. The unfuelled columns are
+the comparison, and the compiled form costs
 between a quarter and a fiftieth. The compiled counts are for the
 eight-program set: the case over `quot` grows with the number of static
 quotations in the whole program, so `3 [dup +] i` alone costs 428.
-Kernel sizes: interpreted `exec` 2,538 atoms (`execU` 2,492); compiled
-`apply` 3,366 (`applyU` 3,078), `seq` 42.
+Kernel sizes: interpreted `exec` 2,488 atoms (`execU` 2,492); compiled
+`apply` 3,074 (`applyU` 3,078), `seq` 42.
 
 **How `i` was settled.** A quotation that is *code* would need a
 function-typed constructor field, which Stage B cannot spell. The compiled
@@ -235,7 +247,8 @@ set, `prog` is the program, `result === RVal stack | RErr | RTime`.
 
 **Kernel.** Joy's basis and nothing else: `Dup Swap Pop Cons Cat Unit Dip
 Do`, plus `Ifz`, `Lit`, `Quote` and `Add`. `exec f p s` folds `p` over `s`
-under fuel `f`; `step ex w q s` dispatches on the word. Words that inspect
+under fuel `f`, a Church numeral applied to the loop's body; `step ex w q
+s` dispatches on the word. Words that inspect
 the stack match to the depth they need and return `RErr` from every
 `Empty` branch; no word inspects `q` except `Do`, `Dip` and `Ifz`, which
 splice into it. Everything Forth would call a primitive (`over rot nip
@@ -316,35 +329,40 @@ splice (`cat`) `Do` against a CPS `exec` that sequences results instead of
 copying continuations. Exit: a table here and in SKIjack's
 `RUNTIME-DESIGN.md` §8, and a decision on `Do`.
 
-*Census, first result (2026-09-28).* Avon's dynamic census
-(`avon/docs/DESIGN.md` §6.7) replaces `jets.py` here: it counts the terms
-a run calls, not the terms a program contains, and weighs each by the
-contractions a jet on it would absorb. `python3 -m skilark.export` writes
-the 41 runs; `avon census` reproduces every pinned count. Per form, the
-three leading rows (each alone; rows overlap and do not add):
+*Census (2026-09-28; rerun 2026-10-23 on Church fuel).* Avon's dynamic
+census (`avon/docs/DESIGN.md` §6.7) replaces `jets.py` here: it counts
+the terms a run calls, not the terms a program contains, and weighs each
+by the contractions a jet on it would absorb. `python3 -m skilark.export`
+writes the 41 runs; `avon census` reproduces every pinned count. Per
+form, the three leading rows (each alone; rows overlap and do not add):
 
 | form | runs | contractions | leading rows, % absorbed |
 |---|---:|---:|---|
-| phase 1 | 9 | 344,888 | `λabcdef. f (a b d)` 17.1; a wrapper of `step` 12.7; `λabcde. e (a b c)` 11.8 |
-| interpreted | 16 | 432,962 | `step` 16.9; `λabcdef. f (a b d)` 13.6; `B (B S)` 12.1 |
-| compiled | 16 | 150,548 | `λabcdef. f (a b d)` 15.5; `B (B S)` 11.5; `B (B K)` 11.1 |
+| phase 1 | 9 | 89,686 | a wrapper of `step` 46.9; `B (B S)` 29.6; `B (B (B S))` 18.5 |
+| interpreted | 16 | 178,827 | a wrapper of `step` 44.7; `B (B S)` 28.2; `B (B (B S))` 17.7 |
+| compiled | 16 | 64,500 | `applyK` 25.7; `B (B S)` 19.9; `B (B K)` 13.5 |
 
-The compiled form runs the same eight programs in 35% of the interpreted
-form's contractions. `step` accounts for a quarter of the gap: 386 calls
-at 189 contractions each, 72,954 of 282,414.
+On the Scott fuel of the first run the three forms took 344,888, 432,962
+and 150,548, and `λabcdef. f (a b d)` led two of them; with the fuel gone
+the interpreter's dispatch leads. The compiled form runs the same eight
+programs in 36% of the interpreted form's contractions. `step` accounts
+for 70% of the gap: 386 calls at 207 contractions each with its wrapper,
+79,902 of 114,327.
 
 *Against the J1 and the F18A.* The hardware makes the stack words
 primitive: `dup`, `drop`, `swap`, `over` are fields of one J1 instruction,
 and `+`, `and`, `2*` are single F18A opcodes. In SKI the words cost almost
-nothing. `Dup`, `Swap`, `Add`, `Do` and `Pop` are nullary constructors of
-`word`, selectors 12 to 31 atoms long, called 75, 64, 60, 53 and 11 times
-in 928,398 contractions; none ranks. What ranks is what the hardware
+nothing. `Dup`, `Swap`, `Add` and `Do` are nullary constructors of
+`word`, selectors 12 to 31 atoms long, called 75, 64, 60 and 53 times in
+333,013 contractions; none ranks. What ranks is what the hardware
 builds into its datapath instead of its opcode list:
 
 - *the stack cell:* `Cons`/`Push`, 2,105 fires at 19 contractions;
 - *instruction dispatch:* `step`, 189 contractions a word;
-- *the counter:* `Suc`, 10,153 fires, numerals and the fuel among them
-  -- the J1's `T-1` and the F18A's `next`/`unext` in hardware;
+- *the counter:* `Suc` -- the J1's `T-1` and the F18A's `next`/`unext`
+  in hardware -- fired 10,153 times on the Scott fuel and fires 416 on
+  Church fuel: the fuel was 96% of it, and a counter the program need not
+  keep is the cheapest jet;
 - *argument plumbing:* `B (B K)`, `B (B S)`, `T`, the combinators that
   bracket abstraction leaves under binders -- what a register file or a
   stack's fixed depth makes free.
@@ -360,9 +378,9 @@ each program):
 
 | loop | fuel | fuelled | unfuelled |
 |---|---|---:|---:|
-| splice (the kernel) | computed (the kernel) | 339,917 | 93,045 |
+| splice | computed (the kernel's before Church fuel) | 339,917 | 93,045 |
 | splice | literal | 102,917 | |
-| splice | Church | 85,558 | |
+| splice (the kernel) | Church (the kernel's) | 85,782 | |
 | stack | computed | 422,374 | 123,771 |
 | stack | literal | 144,380 | |
 | sequenced | computed | 383,889 | 82,241 |
@@ -372,24 +390,26 @@ The *splice* is the kernel's loop: `Do`, `Dip` and `Ifz` run `cat r q`.
 The *stack* loop keeps the continuation as data, `ctl === Halt | Ret
 prog ctl`, and copies nothing. The *sequenced* loop runs a quotation to
 its result and the rest of the program on that result's stack. *Computed*
-fuel is the kernel's `fuel := mul ten (add ten ten)`; *literal* is the
-same 200 written out as `Suc`s; *Church* is no numeral at all, the
-loop's body applied 200 times (`c200 loopC timeC`).
+fuel is the Scott numeral the kernel had, `mul ten (add ten ten)`;
+*literal* is the same 200 written out as `Suc`s; *Church* is no numeral
+at all, the loop's body applied 200 times (`exec fuel`, the kernel's
+since the decision below).
 
-*Fuel.* The kernel's fuel costs more than the programs it bounds:
-fuelled runs take 3.65 times the unfuelled. The numeral is computed as
+*Fuel.* Computed fuel costs more than the programs it bounds: fuelled
+runs take 3.65 times the unfuelled. The numeral is computed as
 it is consumed, at about 1,200 contractions a unit on `1 2 + dup +`
 (7,262 for six units), against 47 a unit for the literal. Church fuel
 costs nothing a unit: its fuelled runs take 0.92 of the unfuelled loop,
 whose self-reference through the expander's fixpoint costs more than one
 unfolding. The compiled form gives the same order, 117,770 computed,
-42,284 literal and 31,632 Church against 32,778 unfuelled. Church fuel
+42,284 literal and 31,722 Church against 32,778 unfuelled. Church fuel
 stops a run at the same word as the Scott numeral: one unit a word and
 one at `Done`, so `1 2 + dup +` needs 6 and `3 sumto` 66, and the
 divergent `[dup i] dup i` stops at every bound tried.
 **Decision: fuel becomes a Church numeral**, in the kernel and the
-compiled form. That re-pins every fuelled count here and the census
-exports Avon's fixtures check, so it is its own change.
+compiled form. It went in as its own change, since it re-pinned every
+fuelled count and the census exports; Avon's copies of the exports
+follow when its SKIlark pin moves.
 
 *`Do`.* The splice copies the quotation it runs once, so it costs a
 constant factor of the run, not an asymptotic one. `[P] i` against `P`,
@@ -408,8 +428,8 @@ and 23,983 more: 100 to 150 contractions a word copied, beside 330 to
   every field first-order.
 
 **Decision: `Do` stays a splice.** With Church fuel its fuelled runs
-take 85,558 contractions, a quarter of today's 339,917 and below
-today's unfuelled 93,045; the best fuelled alternative, sequenced with
+take 85,782 contractions, a quarter of the Scott fuel's 339,917 and
+below the unfuelled 93,045; the best fuelled alternative, sequenced with
 literal fuel, takes 118,410.
 
 **Predicates in zero knowledge (`skilark/zk.py`, 2026-09-29).** A Joy
@@ -456,15 +476,15 @@ commitment needs its hash computed outside the reduction, a data jet.
 **Phase 4: write-up.** The numbers justify a short one. Beside the
 correspondence table, the two modes, the two-level dictionary and the
 laws as jet obligations, Phase 3 gives it three measured results: the
-compiled form runs the programs in 35% of the interpreted form's
-contractions; on SKI the representation is what costs, since the census
+compiled form runs the programs in about a third of the interpreted
+form's contractions; on SKI the representation is what costs, since the census
 ranks constructors, dispatch and counters and never the words, and
 Church fuel removes three quarters of a fuelled run; and copying a
 quotation is cheaper than threading a continuation, because one more
 argument through `step` costs more than the copy. They are host
 contractions on one small kernel, which makes a workshop paper rather
-than a journal one. Church fuel goes into the kernel first, so the
-paper's counts are the kernel's. Stack-effect typing (depth, not just
+than a journal one. The kernel runs on Church fuel, so the paper's
+counts are its counts. Stack-effect typing (depth, not just
 shape: Diggins's Cat, Kleffner's thesis, Mirth) is a separate thread and
 is not promised.
 No mechanized verification of a Joy or Forth implementation is known to
@@ -481,11 +501,11 @@ treatment, and Joy's laws were argued on paper.
   compiled form does not splice. Measured in §3: 100 to 150 contractions
   a word copied, a constant factor of running it, and both alternatives
   cost more. The splice stays.
-- **Fuel dominates the counts.** `1 2 + dup +` costs 2,014 contractions
-  without fuel and 9,276 with it, since the numeral is computed as it is
-  consumed. Church fuel brings it to 1,994 (§3). Until the kernel takes
-  it, every pinned fuelled count includes the computed numeral, so
-  compare the modes unfuelled.
+- **Fuel dominated the counts.** `1 2 + dup +` cost 2,014 contractions
+  without fuel and 9,276 with the Scott numeral, computed as it was
+  consumed. The kernel's Church fuel brings it to 2,003 (§3), so fuelled
+  and unfuelled counts now differ by at most 10%; the modes still compare
+  unfuelled, since their fuels bound different things.
 - **Closed sums.** `item` and `word` are fixed at compile time; extending
   either is a re-compile, as extending SKIjack's `term5` is. That is the
   intended story and the write-up says so before a reviewer does.
@@ -496,7 +516,7 @@ treatment, and Joy's laws were argued on paper.
   puts the level-1 runs at minutes each on the reference reducer; they
   are measured, recorded and gated behind `--runslow`, not run on every
   push. On Avon (`SKIJACK_REDUCER=avon`) the whole suite, these runs
-  included, takes 53 s.
+  included, takes 45 s.
 - **The name.** SKIlark is a working name.
 
 ## 5. Acceptance
