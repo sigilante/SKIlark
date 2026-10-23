@@ -1,8 +1,8 @@
 """Phase 2: the same Joy programs through the front end in its three
-forms.  The interpreted counts are the kernel's with stages 1 and 2 of
-Joy (PLAN.md §3), the compiled counts the compiled form's, which these
-programs, using no truth value, leave as they were; all measured on
-skijack 0.2.1.
+forms.  The counts are the kernel's with Joy's stages 1, 1b and 2
+(PLAN.md §3): ``sumto`` is written with ``ifte`` and ``pred``, so this
+set compiles with integers and truth values; all measured on skijack
+0.2.1.
 """
 
 import pytest
@@ -23,24 +23,24 @@ PROGRAMS = {
 
 #: outcome, then host contractions unfuelled (uP) and fuelled (rP)
 INTERPRETED = {
-    "p1": (("RVal", [6]), 3_514, 3_503),
-    "p2": (("RVal", [6]), 3_493, 3_482),
-    "p3": (("RVal", [1, 2, 1]), 4_590, 4_562),
-    "p4": (("RVal", [1, 3]), 5_860, 5_807),
-    "p5": (("RVal", [[("Lit", 1), ("Lit", 2)]]), 2_570, 2_566),
-    "p6": (("RErr", None), 539, 553),
-    "p7": (("RVal", [6]), 50_935, 48_686),
-    "p8": (("RVal", [15]), 78_023, 73_102),
+    "p1": (("RVal", [6]), 3_875, 3_864),
+    "p2": (("RVal", [6]), 3_759, 3_748),
+    "p3": (("RVal", [1, 2, 1]), 4_880, 4_852),
+    "p4": (("RVal", [1, 3]), 6_238, 6_185),
+    "p5": (("RVal", [[("Lit", 1), ("Lit", 2)]]), 2_734, 2_730),
+    "p6": (("RErr", None), 581, 595),
+    "p7": (("RVal", [6]), 69_325, 65_788),
+    "p8": (("RVal", [15]), 106_248, 98_539),
 }
 COMPILED = {
-    "p1": (("RVal", [6]), 493, 493),
-    "p2": (("RVal", [6]), 536, 550),
-    "p3": (("RVal", [1, 2, 1]), 626, 640),
-    "p4": (("RVal", [1, 3]), 820, 848),
-    "p5": (("RVal", [("quot", ("RVal", [1, 2]))]), 264, 264),
-    "p6": (("RErr", None), 6, 6),
-    "p7": (("RVal", [6]), 11_847, 11_508),
-    "p8": (("RVal", [15]), 18_186, 17_413),
+    "p1": (("RVal", [6]), 668, 668),
+    "p2": (("RVal", [6]), 636, 650),
+    "p3": (("RVal", [1, 2, 1]), 652, 666),
+    "p4": (("RVal", [1, 3]), 872, 900),
+    "p5": (("RVal", [("quot", ("RVal", [1, 2]))]), 273, 273),
+    "p6": (("RErr", None), 8, 8),
+    "p7": (("RVal", [6]), 15_794, 15_395),
+    "p8": (("RVal", [15]), 24_328, 23_429),
 }
 
 
@@ -79,7 +79,7 @@ def test_a_kept_name_survives_as_itself():
 
 def test_interpreted_kernel_sizes(interp):
     s = interp.e.sizes
-    assert (s["exec"], s["execU"], s["step"]) == (8_564, 8_568, 8_504)
+    assert (s["exec"], s["execU"], s["step"]) == (11_521, 11_525, 11_461)
 
 
 @pytest.mark.parametrize("name", sorted(PROGRAMS))
@@ -93,11 +93,11 @@ def test_interpreted_outcomes_and_counts(interp, name):
 
 def test_compiled_kernel_sizes(comp):
     s = comp.e.sizes
-    assert (s["apply"], s["applyU"], s["seq"]) == (3_074, 3_078, 42)
+    assert (s["apply"], s["applyU"], s["seq"]) == (4_946, 4_950, 42)
     # every static quotation is one constructor of quot with one body;
     # the three runtime constructors are what cons, unit and cat build
     static = sorted(k for k in s if k[0] == "Q" and k[1:].isdigit())
-    assert (len(static), s["b1"] > 0) == (10, True)
+    assert (len(static), s["b1"] > 0) == (11, True)
     assert all(k in s for k in ("QCons", "QUnit", "QThen"))
 
 

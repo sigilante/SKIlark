@@ -28,7 +28,7 @@ from . import joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 #: the directory holding the ``.ski`` sources
 DIR = pathlib.Path(__file__).parent / "programs"
@@ -70,8 +70,22 @@ class Run:
         w, wf = peel(fields[0], self.t["word"], max_steps=STEPS)
         word: Any = w
         if wf:
-            word = (w, self.pr.read_nat(wf[0]) if w == "Lit" else self.prog(wf[0]))
+            if w == "Lit":
+                word = (w, self.number(wf[0]))
+            elif w == "Truth":
+                word = (w, peel(wf[0], self.t["logical"], max_steps=STEPS)[0] == "True")
+            else:
+                word = (w, self.prog(wf[0]))
         return [word] + self.prog(fields[1])
+
+    def number(self, term) -> int:
+        """A numeral: a natural, or where the program's numbers are integers
+        (``Pos m`` is m, ``Neg m`` is -(m+1)), an integer."""
+        if "int" not in self.t:
+            return self.pr.read_nat(term)
+        sign, fields = peel(term, self.t["int"], max_steps=STEPS)
+        m = self.pr.read_nat(fields[0])
+        return m if sign == "Pos" else -(m + 1)
 
     def quot(self, term) -> Tuple[str, Outcome]:
         e = self.e
@@ -85,7 +99,7 @@ class Run:
                 return items[::-1]
             kind, payload = peel(fields[0], self.t["item"], max_steps=STEPS)
             if kind == "Num":
-                items.append(self.pr.read_nat(payload[0]))
+                items.append(self.number(payload[0]))
             elif kind == "Logical":
                 b, _ = peel(payload[0], self.t["logical"], max_steps=STEPS)
                 items.append(b == "True")

@@ -39,12 +39,19 @@ DIR = pathlib.Path(__file__).parent / "programs"
 #: Joy's kernel words and the constructor (interpreted) each compiles to
 KERNEL = {
     "dup": "Dup", "swap": "Swap", "pop": "Pop", "cons": "Qcons", "cat": "Cat",
-    "unit": "Unit", "dip": "Dip", "i": "Do", "ifz": "Ifz", "+": "Add",
-    "*": "Mul", "succ": "Succ", "pred": "Pred", "max": "Max", "min": "Min",
+    "unit": "Unit", "dip": "Dip", "i": "Do", "+": "Add", "-": "Sub",
+    "*": "Mul", "/": "Div", "rem": "Rem", "succ": "Succ", "pred": "Pred",
+    "max": "Max", "min": "Min",
     "=": "Eql", "<": "Lt", "and": "And", "or": "Or", "not": "Not",
     "branch": "Branch", "ifte": "Ifte",
     "true": "(Truth True)", "false": "(Truth False)",
 }
+
+#: ``ifz``, the Scott eliminator of a natural (``n [Z] [S] ifz``: Z at 0,
+#: else S with n - 1 pushed), is not Joy and has left the kernel; the
+#: compiled form keeps it for natural-number programs, zk's verifiers among
+#: them, whose terms lean-ski proves
+COMPILED_ONLY = {"ifz"}
 
 #: the words that take a quotation and run it, so their compiled form takes
 #: the eliminator
@@ -53,6 +60,11 @@ APPLYING = ("i", "dip", "ifz", "branch", "ifte")
 #: the words that make or test a truth value; a compiled program carries
 #: truth values on its stack only when it uses one
 TRUTH_WORDS = {"=", "<", "and", "or", "not", "branch", "ifte", "true", "false"}
+
+#: the words that can make a negative number; a compiled program without
+#: one of them or a negative literal computes on naturals, which give it
+#: the same answers
+SIGNED_WORDS = {"-", "pred", "/", "rem"}
 
 #: Joy's own definitions of the derived words, and Kerby's k and y
 DEFINITIONS = {
@@ -63,7 +75,10 @@ DEFINITIONS = {
     "sip": "[dup] dip dip",
     "k": "[pop] dip i",
     "y": "[dup cons] swap cat dup cons i",
-    "sumto": "[swap [pop 0] [dup [swap i] dip 1 + +] ifz] y",
+    "sumto": "[swap [0 =] [pop pop 0] [dup pred swap [swap i] dip +] ifte] y",
+    "neg": "0 swap -",
+    "abs": "dup 0 < [0 swap -] [] branch",
+    "sign": "dup 0 < [pop -1] [0 = [0] [1] branch] branch",
     ">": "swap <",
     "<=": "swap < not",
     ">=": "< not",
@@ -87,7 +102,7 @@ def parse(text: str) -> Program:
                 raise ValueError("unbalanced ']'")
             q = stack.pop()
             stack[-1].append(q)
-        elif t.isdigit():
+        elif t.isdigit() or (t[0] == "-" and t[1:].isdigit()):
             stack[-1].append(int(t))
         else:
             stack[-1].append(t)
@@ -118,7 +133,8 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = ()
             out.append(expand(t, defs, keep))
         elif isinstance(t, str) and t in defs and t not in keep:
             out.extend(expand(parse(defs[t]), defs, keep))
-        elif isinstance(t, str) and t not in KERNEL and t not in keep:
+        elif (isinstance(t, str) and t not in KERNEL and t not in COMPILED_ONLY
+              and t not in keep):
             raise ValueError(f"unknown word {t!r}")
         else:
             out.append(t)
@@ -137,6 +153,29 @@ def nat(n: int) -> str:
     return "Zero" if n == 0 else f"(Suc {nat(n - 1)})" if n > 1 else "(Suc Zero)"
 
 
+def integer(n: int) -> str:
+    """An integer as the kernel's ``int``: ``Pos m`` is m, ``Neg m`` is -(m+1)."""
+    return f"(Pos {nat(n)})" if n >= 0 else f"(Neg {nat(-n - 1)})"
+
+
+def _walk(progs: Iterable[Program], hit) -> bool:
+    """Whether ``hit`` holds of any token of the programs or their quotations."""
+    def walk(p: Program) -> bool:
+        return any(walk(t) if isinstance(t, list) else hit(t) for t in p)
+    return any(walk(p) for p in progs)
+
+
+def _uses_truth(progs: Iterable[Program]) -> bool:
+    """Whether any program, or any quotation in one, uses a truth word."""
+    return _walk(progs, lambda t: t in TRUTH_WORDS)
+
+
+def _uses_signs(progs: Iterable[Program]) -> bool:
+    """Whether any program can make a negative number: a signed word or a
+    negative literal."""
+    return _walk(progs, lambda t: t in SIGNED_WORDS or (isinstance(t, int) and t < 0))
+
+
 def _kernel() -> str:
     return (DIR / "kernel.ascii.ski").read_text(encoding="utf-8")
 
@@ -148,15 +187,23 @@ def _programs(programs: Dict[str, str], defs: Dict[str, str],
 
 # ------------------------------------------------------------ interpreted
 
-def datum(prog: Program) -> str:
-    """A program as a ``prog`` expression; a kept name is a scry."""
+def datum(prog: Program, basis: bool = False) -> str:
+    """A program as a ``prog`` expression; a kept name is a scry.  With
+    ``basis``, for the basis kernel (``programs/basis.ascii.ski``): its
+    literals are naturals and it has ``Ifz``."""
     if not prog:
         return "Done"
-    t, rest = prog[0], datum(prog[1:])
+    t, rest = prog[0], datum(prog[1:], basis)
     if isinstance(t, int):
-        return f"Then (Lit {nat(t)}) ({rest})"
+        if basis and t < 0:
+            raise ValueError(f"the basis kernel has no negative numbers: {t}")
+        return f"Then (Lit {nat(t) if basis else integer(t)}) ({rest})"
     if isinstance(t, list):
-        return f"Then (Quote ({datum(t)})) ({rest})"
+        return f"Then (Quote ({datum(t, basis)})) ({rest})"
+    if basis and t == "ifz":
+        return f"Then Ifz ({rest})"
+    if t in COMPILED_ONLY:
+        raise ValueError(f"{t!r} is not a Joy word; only the compiled form keeps it")
     if t in KERNEL:
         return f"Then {KERNEL[t]} ({rest})"
     return f"cat ?^/{t} ({rest})"
@@ -180,13 +227,11 @@ COMPILED_KERNEL = """\
 -- SKIlark, compiled: every word a function stack -> result, a program the
 -- composition of its words, quotations defunctionalized (skilark.joy).
 nat    === Zero | Suc nat
-logical === False | True
-item   === Num nat | Quot quot{LITEM}
+{INTTYPE}logical === False | True
+item   === Num {NUM} | Quot quot{LITEM}
 stack  === Empty | Push item stack
 quot   === {QUOTS}QCons item quot | QUnit item | QThen quot
 result === RVal stack | RErr | RTime
-
-add m n = n |> {{ Zero m; Suc k (Suc (add m k)) }}
 
 -- composition, threading the result
 seq f g s = f s |> {{ RVal t (g t); RErr RErr; RTime RTime }}
@@ -201,25 +246,9 @@ wCat s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (t |> {{ Empty
 wUnit s = s |> {{ Empty RErr; Push a t (RVal (Push (Quot (QUnit a)) t)) }}
 wDip ap s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (t |> {{ Empty RErr; Push b u (ap r u |> {{ RVal v (RVal (Push b v)); RErr RErr; RTime RTime }}) }}){LC} }}) }}
 wDo ap s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot r (ap r t){LC} }}) }}
-wIfz ap s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot sc (t |> {{ Empty RErr; Push b u (b |> {{ Num n RErr; Quot z (u |> {{ Empty RErr; Push c v (c |> {{ Num n (n |> {{ Zero (ap z v); Suc m (ap sc (Push (Num m) v)) }}); Quot r RErr{LC} }}) }}){LC} }}) }}){LC} }}) }}
 wLit n s = RVal (Push (Num n) s)
 wQuote r s = RVal (Push (Quot r) s)
-wAdd s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (RVal (Push (Num (add m n)) u)); Quot r RErr{LC} }}); Quot r RErr{LC} }}) }}) }}
-
--- numbers, x below y on the stack; pred of 0 is an error until integers
--- are signed
-mul m n = n |> {{ Zero Zero; Suc k (add m (mul m k)) }}
-less m n = n |> {{ Zero False; Suc j (m |> {{ Zero True; Suc i (less i j) }}) }}
-num2 f s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (RVal (Push (f n m) u)); Quot r RErr{LC} }}); Quot r RErr{LC} }}) }}) }}
-mulI n m = Num (mul n m)
-maxI n m = Num (less n m |> {{ False n; True m }})
-minI n m = Num (less n m |> {{ False m; True n }})
-wMul s = num2 mulI s
-wMax s = num2 maxI s
-wMin s = num2 minI s
-wSucc s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (RVal (Push (Num (Suc n)) t)); Quot r RErr{LC} }}) }}
-wPred s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (n |> {{ Zero RErr; Suc m (RVal (Push (Num m) t)) }}); Quot r RErr{LC} }}) }}
-{TRUTH}
+{NUMBERS}{TRUTH}
 one   := Suc Zero
 two   := Suc one
 five  := Suc (Suc (Suc two))
@@ -237,12 +266,79 @@ applyU q s = q |> {{ {CASES_U}QCons x r (applyU r (Push x s)); QUnit x (RVal (Pu
 """
 
 
+#: a compiled program's numbers when none can be negative (``SIGNED_WORDS``):
+#: naturals, with ``ifz``
+COMPILED_NATURALS = """
+-- numbers, naturals: x below y on the stack
+add m n = n |> {{ Zero m; Suc k (Suc (add m k)) }}
+mul m n = n |> {{ Zero Zero; Suc k (add m (mul m k)) }}
+less m n = n |> {{ Zero False; Suc j (m |> {{ Zero True; Suc i (less i j) }}) }}
+same m n = m |> {{ Zero (n |> {{ Zero True; Suc j False }}); Suc i (n |> {{ Zero False; Suc j (same i j) }}) }}
+num2 f s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (RVal (Push (f n m) u)); Quot r RErr{LC} }}); Quot r RErr{LC} }}) }}) }}
+mulI n m = Num (mul n m)
+maxI n m = Num (less n m |> {{ False n; True m }})
+minI n m = Num (less n m |> {{ False m; True n }})
+wAdd s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (RVal (Push (Num (add m n)) u)); Quot r RErr{LC} }}); Quot r RErr{LC} }}) }}) }}
+wMul s = num2 mulI s
+wMax s = num2 maxI s
+wMin s = num2 minI s
+wSucc s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (RVal (Push (Num (Suc n)) t)); Quot r RErr{LC} }}) }}
+-- n [Z] [S] ifz: Z at 0, else S with n - 1 pushed
+wIfz ap s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot sc (t |> {{ Empty RErr; Push b u (b |> {{ Num n RErr; Quot z (u |> {{ Empty RErr; Push c v (c |> {{ Num n (n |> {{ Zero (ap z v); Suc m (ap sc (Push (Num m) v)) }}); Quot r RErr{LC} }}) }}){LC} }}) }}){LC} }}) }}
+"""
+
+#: a compiled program's numbers when one can be negative: the kernel's
+#: integers, a sign and a magnitude
+COMPILED_INTEGERS = """
+-- numbers, integers: Pos m is m, Neg m is -(m+1); x below y on the stack
+add m n = n |> {{ Zero m; Suc k (Suc (add m k)) }}
+mul m n = n |> {{ Zero Zero; Suc k (add m (mul m k)) }}
+lessN m n = n |> {{ Zero False; Suc j (m |> {{ Zero True; Suc i (lessN i j) }}) }}
+sameN m n = m |> {{ Zero (n |> {{ Zero True; Suc j False }}); Suc i (n |> {{ Zero False; Suc j (sameN i j) }}) }}
+monus m n = n |> {{ Zero m; Suc j (m |> {{ Zero Zero; Suc i (monus i j) }}) }}
+divN m n = lessN m n |> {{ False (Suc (divN (monus m n) n)); True Zero }}
+remN m n = lessN m n |> {{ False (remN (monus m n) n); True m }}
+differ a b = a |> {{ False b; True (b |> {{ False True; True False }}) }}
+negN k = k |> {{ Zero (Pos Zero); Suc j (Neg j) }}
+diff m n = m |> {{ Zero (negN n); Suc i (n |> {{ Zero (Pos m); Suc j (diff i j) }}) }}
+mag z = z |> {{ Pos m m; Neg m (Suc m) }}
+isNeg z = z |> {{ Pos m False; Neg m True }}
+signed s k = s |> {{ False (Pos k); True (negN k) }}
+plus a b = a |> {{ Pos m (b |> {{ Pos n (Pos (add m n)); Neg n (diff m (Suc n)) }}); Neg m (b |> {{ Pos n (diff n (Suc m)); Neg n (Neg (Suc (add m n))) }}) }}
+minus z = z |> {{ Pos m (negN m); Neg m (Pos (Suc m)) }}
+times a b = signed (differ (isNeg a) (isNeg b)) (mul (mag a) (mag b))
+divide a b = signed (differ (isNeg a) (isNeg b)) (divN (mag a) (mag b))
+modulo a b = signed (isNeg a) (remN (mag a) (mag b))
+less a b = a |> {{ Pos m (b |> {{ Pos n (lessN m n); Neg n False }}); Neg m (b |> {{ Pos n True; Neg n (lessN n m) }}) }}
+same a b = a |> {{ Pos m (b |> {{ Pos n (sameN m n); Neg n False }}); Neg m (b |> {{ Pos n False; Neg n (sameN m n) }}) }}
+num2 f s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (RVal (Push (f n m) u)); Quot r RErr{LC} }}); Quot r RErr{LC} }}) }}) }}
+div2 f s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (mag m |> {{ Zero RErr; Suc k (RVal (Push (f n m) u)) }}); Quot r RErr{LC} }}); Quot r RErr{LC} }}) }}) }}
+num1 f s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (RVal (Push (f n) t)); Quot r RErr{LC} }}) }}
+addI n m = Num (plus n m)
+subI n m = Num (plus n (minus m))
+mulI n m = Num (times n m)
+divI n m = Num (divide n m)
+remI n m = Num (modulo n m)
+maxI n m = Num (less n m |> {{ False n; True m }})
+minI n m = Num (less n m |> {{ False m; True n }})
+succI z = Num (z |> {{ Pos m (Pos (Suc m)); Neg m (negN m) }})
+predI z = Num (z |> {{ Pos m (m |> {{ Zero (Neg Zero); Suc k (Pos k) }}); Neg m (Neg (Suc m)) }})
+wAdd s = num2 addI s
+wSub s = num2 subI s
+wMul s = num2 mulI s
+wDiv s = div2 divI s
+wRem s = div2 remI s
+wMax s = num2 maxI s
+wMin s = num2 minI s
+wSucc s = num1 succI s
+wPred s = num1 predI s
+"""
+
 #: the compiled truth-value words, present only in a program that uses one
 #: (``TRUTH_WORDS``): the item constructor ``Logical`` changes every term
 #: that cases on an item, so a program without truth values keeps its terms
 COMPILED_TRUTH = """
 -- truth values
-same m n = m |> {{ Zero (n |> {{ Zero True; Suc j False }}); Suc i (n |> {{ Zero False; Suc j (same i j) }}) }}
 both a b = a |> {{ False False; True b }}
 either a b = a |> {{ False b; True True }}
 negate a = a |> {{ False True; True False }}
@@ -265,29 +361,29 @@ wIfte ap s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot f (t |> {{ E
 """
 
 
-def _uses_truth(progs: Iterable[Program]) -> bool:
-    """Whether any program, or any quotation in one, uses a truth word."""
-    def walk(p: Program) -> bool:
-        return any(walk(t) if isinstance(t, list) else t in TRUTH_WORDS for t in p)
-    return any(walk(p) for p in progs)
-
-
-def _compiled_kernel(n: int, truth: bool) -> str:
+def _compiled_kernel(n: int, truth: bool, signs: bool) -> str:
     """The compiled kernel for ``n`` static quotations, with truth values
-    when ``truth``."""
+    when ``truth`` and integers when ``signs`` (else naturals)."""
     lc = "; Logical lg RErr" if truth else ""
+    numbers = COMPILED_INTEGERS if signs else COMPILED_NATURALS
     return COMPILED_KERNEL.format(
         QUOTS="".join(f"Q{k} | " for k in range(1, n + 1)),
         CASES_F="".join(f"Q{i} (b{i} k s); " for i in range(1, n + 1)),
         CASES_U="".join(f"Q{k} (b{k} applyU s); " for k in range(1, n + 1)),
         LITEM=" | Logical logical" if truth else "", LC=lc,
+        INTTYPE="int    === Pos nat | Neg nat\n" if signs else "",
+        NUM="int" if signs else "nat",
+        NUMBERS=numbers.format(LC=lc),
         TRUTH=COMPILED_TRUTH.format() if truth else "")
 
 
 class _Compiler:
-    def __init__(self) -> None:
+    """Bodies for one program set; ``signs`` when its numbers are integers."""
+
+    def __init__(self, signs: bool) -> None:
         self.quots: List[Program] = []
         self.index: Dict[str, int] = {}
+        self.signs = signs
 
     def quot(self, q: Program) -> str:
         key = words(q)
@@ -298,9 +394,13 @@ class _Compiler:
 
     def word(self, t: Token, ap: str = "ap", keep: Iterable[str] = ()) -> str:
         if isinstance(t, int):
-            return f"(wLit {nat(t)})"
+            return f"(wLit {integer(t) if self.signs else nat(t)})"
         if isinstance(t, list):
             return f"(wQuote {self.quot(t)})"
+        if t == "ifz":
+            if self.signs:
+                raise ValueError("ifz takes naturals; this program's numbers are integers")
+            return f"(wIfz {ap})"
         if t in ("true", "false"):
             return f"(wTruth {t.capitalize()})"
         if t in APPLYING:
@@ -327,15 +427,16 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     """For each program ``p``: ``cP`` (its body, taking the eliminator),
     ``rP`` (under ``apply fuel``, ``fuel`` a Church numeral) and ``uP``
     (under ``applyU``)."""
-    c = _Compiler()
     progs = _programs(programs, defs)
+    signs = _uses_signs(progs.values())
+    c = _Compiler(signs)
     tops = {name: c.body(prog) for name, prog in progs.items()}
     bodies: List[str] = []
     i = 0
     while i < len(c.quots):                 # quot() may append while we walk
         bodies.append(f"b{i + 1} ap = {c.body(c.quots[i])}")
         i += 1
-    kernel = _compiled_kernel(len(c.quots), _uses_truth(progs.values()))
+    kernel = _compiled_kernel(len(c.quots), _uses_truth(progs.values()), signs)
     out = [kernel, "\n-- static quotations, hoisted\n"]
     out.extend(f"{b}\n" for b in bodies)
     out.append("\n-- programs, from skilark.joy.compiled\n")
@@ -395,18 +496,22 @@ _LEVEL1_READER = """
 -- booleans, K for yes and K I for no, which are atoms alone; the other
 -- outcomes are S applied to atoms.
 eqNat a b = a |> {{ Zero (b |> {{ Zero K; Suc n (K I) }}); Suc m (b |> {{ Zero (K I); Suc n (eqNat m n) }}) }}
-topIs v r = r |> {{ RVal s (s |> {{ Empty (S S); Push a t (a |> {{ Num n (eqNat n v); Quot q (S K K){LC} }}) }}); RErr (S K); RTime (S I) }}
+topIs v r = r |> {{ RVal s (s |> {{ Empty (S S); Push a t (a |> {{ Num n {TEST}; Quot q (S K K){LC} }}) }}); RErr (S K); RTime (S I) }}
 """
 
 
-def level1_reader(truth: bool) -> str:
+def level1_reader(truth: bool, signs: bool) -> str:
     """The level-1 reader for a kernel whose items include truth values
-    when ``truth``: a truth value on top answers ``S S K``."""
-    return _LEVEL1_READER.format(LC="; Logical b (S S K)" if truth else "")
+    when ``truth`` (a truth value on top answers ``S S K``) and whose
+    numbers are integers when ``signs`` (a negative is not the natural
+    asked for)."""
+    test = "(n |> {{ Pos m (eqNat m v); Neg m (K I) }})" if signs else "(eqNat n v)"
+    return _LEVEL1_READER.format(LC="; Logical b (S S K)" if truth else "",
+                                 TEST=test.format())
 
 
-#: the reader for the interpreted kernel, whose items include truth values
-LEVEL1_READER = level1_reader(True)
+#: the reader for the interpreted kernel: truth values, integers
+LEVEL1_READER = level1_reader(True, True)
 
 
 def level1(programs: Dict[str, str], namespace: Sequence[str],
@@ -427,12 +532,14 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
     progs = _programs(programs, defs, keep)
     if form == "interpreted":
         kernel = _kernel()
-        truth = True
+        truth = signs = True
         facts = {n: datum(expand(parse(defs[n]), defs)) for n in keep}
         runs = {name: f"execU ({datum(prog)}) Empty" for name, prog in progs.items()}
         hoisted: List[str] = []
     elif form == "compiled":
-        c = _Compiler()
+        facts_progs = [expand(parse(defs[n]), defs) for n in keep]
+        signs = _uses_signs(list(progs.values()) + facts_progs)
+        c = _Compiler(signs)
         facts = {n: c.body(expand(parse(defs[n]), defs), "applyU") for n in keep}
         runs = {name: f"{c.body(prog, 'applyU', keep)} Empty" for name, prog in progs.items()}
         hoisted = []
@@ -440,14 +547,13 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
         while i < len(c.quots):
             hoisted.append(f"b{i + 1} ap = {c.body(c.quots[i])}")
             i += 1
-        facts_progs = [expand(parse(defs[n]), defs) for n in keep]
         truth = _uses_truth(list(progs.values()) + facts_progs)
-        kernel = _compiled_kernel(len(c.quots), truth)
+        kernel = _compiled_kernel(len(c.quots), truth, signs)
     else:
         raise ValueError(f"unknown form {form!r}")
     out = [kernel, "\n".join(hoisted) + ("\n" if hoisted else ""),
            LEVEL1_KERNEL.format(SEGS=" | ".join(segment(n) for n in keep)),
-           level1_reader(truth),
+           level1_reader(truth, signs),
            "\ndict := ns{" + ", ".join(f"/{n} => <{v}>" for n, v in facts.items()) + "}\n",
            f"\n-- programs, from skilark.joy.level1 ({form} form)\n"]
     for name, run in runs.items():
