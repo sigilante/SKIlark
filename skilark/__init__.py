@@ -28,7 +28,7 @@ from . import joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 #: the directory holding the ``.ski`` sources
 DIR = pathlib.Path(__file__).parent / "programs"
@@ -86,6 +86,9 @@ class Run:
             kind, payload = peel(fields[0], self.t["item"], max_steps=STEPS)
             if kind == "Num":
                 items.append(self.pr.read_nat(payload[0]))
+            elif kind == "Logical":
+                b, _ = peel(payload[0], self.t["logical"], max_steps=STEPS)
+                items.append(b == "True")
             elif self.mode == "compiled":
                 items.append(self.quot(payload[0]))
             else:
@@ -116,7 +119,7 @@ class Run:
 
 #: the level-1 reader's spellings of the outcomes (joy.LEVEL1_READER)
 _ATOM_OUTCOMES = {"K": "Yes", "K I": "No", "S S": "OEmpty", "S K K": "OQuot",
-                  "S K": "RErr", "S I": "RTime"}
+                  "S S K": "OLogical", "S K": "RErr", "S I": "RTime"}
 
 
 def _read_atoms(term) -> Outcome:

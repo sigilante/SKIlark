@@ -1,6 +1,8 @@
 """Phase 2: the same Joy programs through the front end in its three
-forms.  The unfuelled counts were measured on skijack 0.2.0 and hold on
-0.2.1; the fuelled counts are Church fuel's, measured on 0.2.1.
+forms.  The interpreted counts are the kernel's with stages 1 and 2 of
+Joy (PLAN.md §3), the compiled counts the compiled form's, which these
+programs, using no truth value, leave as they were; all measured on
+skijack 0.2.1.
 """
 
 import pytest
@@ -21,14 +23,14 @@ PROGRAMS = {
 
 #: outcome, then host contractions unfuelled (uP) and fuelled (rP)
 INTERPRETED = {
-    "p1": (("RVal", [6]), 2_014, 2_003),
-    "p2": (("RVal", [6]), 2_029, 2_018),
-    "p3": (("RVal", [1, 2, 1]), 2_589, 2_561),
-    "p4": (("RVal", [1, 3]), 3_250, 3_197),
-    "p5": (("RVal", [[("Lit", 1), ("Lit", 2)]]), 1_429, 1_425),
-    "p6": (("RErr", None), 276, 290),
-    "p7": (("RVal", [6]), 31_890, 29_641),
-    "p8": (("RVal", [15]), 49_568, 44_647),
+    "p1": (("RVal", [6]), 3_514, 3_503),
+    "p2": (("RVal", [6]), 3_493, 3_482),
+    "p3": (("RVal", [1, 2, 1]), 4_590, 4_562),
+    "p4": (("RVal", [1, 3]), 5_860, 5_807),
+    "p5": (("RVal", [[("Lit", 1), ("Lit", 2)]]), 2_570, 2_566),
+    "p6": (("RErr", None), 539, 553),
+    "p7": (("RVal", [6]), 50_935, 48_686),
+    "p8": (("RVal", [15]), 78_023, 73_102),
 }
 COMPILED = {
     "p1": (("RVal", [6]), 493, 493),
@@ -77,7 +79,7 @@ def test_a_kept_name_survives_as_itself():
 
 def test_interpreted_kernel_sizes(interp):
     s = interp.e.sizes
-    assert (s["exec"], s["execU"], s["step"]) == (2_488, 2_492, 2_428)
+    assert (s["exec"], s["execU"], s["step"]) == (8_564, 8_568, 8_504)
 
 
 @pytest.mark.parametrize("name", sorted(PROGRAMS))
