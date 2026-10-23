@@ -1,9 +1,9 @@
 # SKIlark: Joy on SKIjack
 
 > **Status (2026-10-23).** Phases 1–3 built; predicates in zero
-> knowledge (§3) built; Joy in full under way, stages 1, 1b and 2 built
+> knowledge (§3) built; Joy in full under way, stages 1 to 3 built
 > (arithmetic and comparison on signed integers, truth values, `branch`,
-> `ifte`; `ifz` retired).
+> `ifte`, quotations as lists with words as symbols; `ifz` retired).
 > `skilark/programs/` holds the kernel, the basis kernel phase 3 measured
 > and the phase-1 programs; `skilark/joy.py` is the front end in three
 > forms; `skilark/variants.py` is the basis kernel's loop and fuel in
@@ -151,23 +151,23 @@ programs, host contractions, unfuelled (`uP`) and fuelled (`rP`):
 
 | Joy | result | interpreted | fuelled | compiled | fuelled |
 |---|---|---|---|---|---|
-| `1 2 + dup +` | `6` | 3,875 | 3,864 | 668 | 668 |
-| `3 [dup +] i` | `6` | 3,759 | 3,748 | 636 | 650 |
-| `1 2 over` | `1 2 1` | 4,880 | 4,852 | 652 | 666 |
-| `1 [2] [3] k` | `1 3` | 6,238 | 6,185 | 872 | 900 |
-| `1 2 unit cons` | `[1 2]` | 2,734 | 2,730 | 273 | 273 |
-| `+` (empty stack) | `RErr` | 581 | 595 | 8 | 8 |
-| `3 sumto` | `6` | 69,325 | 65,788 | 15,794 | 15,395 |
-| `5 sumto` | `15` | 106,248 | 98,539 | 24,328 | 23,429 |
+| `1 2 + dup +` | `6` | 3,643 | 3,632 | 668 | 668 |
+| `3 [dup +] i` | `6` | 3,466 | 3,455 | 636 | 650 |
+| `1 2 over` | `1 2 1` | 4,343 | 4,315 | 652 | 666 |
+| `1 [2] [3] k` | `1 3` | 5,554 | 5,501 | 872 | 900 |
+| `1 2 unit cons` | `[1 2]` | 2,435 | 2,431 | 273 | 273 |
+| `+` (empty stack) | `RErr` | 505 | 519 | 8 | 8 |
+| `3 sumto` | `6` | 68,678 | 64,883 | 17,423 | 17,024 |
+| `5 sumto` | `15` | 107,175 | 98,831 | 27,933 | 27,034 |
 
-The counts are the kernel with Joy's stages 1, 1b and 2 (§3), and
+The counts are the kernel with Joy's stages 1 to 3 (§3), and
 `sumto` is written with `ifte` and `pred`, since `ifz` has left the
 kernel: `[swap [0 =] [pop pop 0] [dup pred swap [swap i] dip +] ifte]
 y`. That puts integers and truth values into the compiled set too. On
 the basis kernel alone (`programs/basis.ascii.ski`), which §3's
 measurements run, with `sumto` by `ifz`, `1 2 + dup +` took 2,014
 interpreted and 493 compiled, and `5 sumto` 49,568 and 18,186, unfuelled:
-a `word` of 28 constructors, an `item` of three and a signed number make
+a `word` of 24 constructors, an `item` of four and a signed number make
 every dispatch dearer.
 
 Fuel is one unit per word interpreted and one per quotation applied
@@ -180,8 +180,8 @@ the comparison, and the compiled form costs
 between a quarter and a ninetieth. The compiled counts are for the
 eight-program set: the case over `quot` grows with the number of static
 quotations in the whole program, so `3 [dup +] i` alone costs 428.
-Kernel sizes: interpreted `exec` 11,521 atoms (`execU` 11,525; on the
-basis, 2,488 and 2,492); compiled `apply` 4,946 (`applyU` 4,950), `seq`
+Kernel sizes: interpreted `exec` 16,172 atoms (`execU` 16,176; on the
+basis, 2,488 and 2,492); compiled `apply` 5,567 (`applyU` 5,571), `seq`
 42.
 
 **How `i` was settled.** A quotation that is *code* would need a
@@ -232,27 +232,27 @@ contractions on the reference reducer:
 
 | form | program | fuel | top is 6? | top is 7? |
 |---|---|---|---|---|
-| interpreted | `1 2 + dup +` | 6,000 | yes, 26,021,115 | no, 26,060,992 |
-| interpreted | `1 2 + sq` | 6,000 | yes, 27,015,891 | no, 27,056,776 |
+| interpreted | `1 2 + dup +` | 6,000 | yes, 22,801,690 | no, 22,840,006 |
+| interpreted | `1 2 + sq` | 6,000 | yes, 23,762,440 | no, 23,801,764 |
 | compiled | `1 2 + dup +` | 1,500 | yes, 2,328,665 | no, 2,342,964 |
 | compiled | `1 2 + sq` | 1,500 | yes, 2,337,648 | no, 2,351,954 |
 
-Beside the level-0 counts of `1 2 + dup +` alone (3,875 interpreted,
-493 compiled) the cost of virtualization is five to seven thousandfold:
+Beside the level-0 counts of `1 2 + dup +` alone (3,643 interpreted,
+493 compiled) the cost of virtualization is five to six thousandfold:
 each emulated step walks and rebuilds a spine of thousands of atoms, and
 the interpreted form pays for its bigger term twice over. The
-interpreted rows are the kernel with Joy's stages 1, 1b and 2, whose
+interpreted rows are the kernel with Joy's stages 1 to 3, whose
 larger `step` needs 6,000 units of the interpreter's fuel where the
 basis needed 3,000 (and took 8,796,212 and 9,477,119); the compiled
 rows compute on naturals, as these programs cannot go negative, and are
 the basis's. The lookup itself is cheap: `sq` through the namespace
 costs 9,000 more contractions than `dup +` inline in the compiled form
-and a million more in the interpreted, most of that the extra emulated steps
+and 960,000 more in the interpreted, most of that the extra emulated steps
 of splicing the fact in. These runs take minutes (compiled) to hours
 (interpreted) each on the reference reducer and well under a minute on
 Avon, and are in the suite under `--runslow`; the reader's own cases
 (`test_level1.py`: yes, no, a quotation on top, an empty stack, an
-error, a truth value on top, a negative on top) run in seconds and are pinned. The counts are absurd on their
+error, a truth value, a negative or a symbol on top) run in seconds and are pinned. The counts are absurd on their
 face and that is the point of phase 3: every emulated step is a head
 structure the runtime would jet.
 
@@ -265,9 +265,10 @@ one branch in each word that inspects items). `word` is the instruction
 set, `prog` is the program, `result === RVal stack | RErr | RTime`.
 
 **Kernel.** Joy's basis, `Dup Swap Pop Cons Cat Unit Dip Do`, plus
-`Lit`, `Quote` and `Add`, growing toward Joy in full: stages 1, 1b and 2
-add `Sub Mul Div Rem Succ Pred Max Min Eql Lt` on signed integers, truth
-values (`Truth`), `And Or Not`, `Branch` and `Ifte` (§3). `Ifz`, the
+`Lit`, `Quote` and `Add`, growing toward Joy in full: stages 1 to 3 add
+`Sub Mul Div Rem Eql Lt` on signed integers, truth values (`Truth`),
+`Branch` and `Ifte`, and `Uncons Null Small` over quotations read as
+lists (§3); `succ pred max min not and or` are derived since stage 3. `Ifz`, the
 basis's Scott eliminator of a natural, has left the kernel.
 `programs/basis.ascii.ski` keeps the basis alone, with `Ifz`, as phase 3
 measured it. `exec f p s` folds `p` over `s`
@@ -569,16 +570,54 @@ kernel gains `- / rem`; `neg abs sign` are derived (`neg` is `0 swap
   terms (`vsplitB` 23,475 atoms, `vcsplitB` 53,597), and the level-1
   compiled runs their counts.
 
-The interpreted kernel's `word` has 28 constructors and its `step`
-11,461 atoms, against 12 and 2,428 on the basis; every interpreted
-dispatch costs more (§1b). `Choose` holds the branches on its saved
-stack, one field, so the largest constructor takes 29 arguments, under
-Avon's cap of 32. Forty-eight programs and nineteen laws pin the words in
+After stage 1b the interpreted kernel's `word` had 28 constructors and
+its `step` 11,461 atoms, against 12 and 2,428 on the basis. `Choose`
+holds the branches on its saved stack, one field, so its largest
+constructor took 29 arguments, under Avon's cap of 32. Forty-eight programs and nineteen laws pin the words in
 both forms (`tests/test_words.py`), among them `-7 2 / 2 * -7 2 rem +`
 giving -7 and `5 fact` (by `ifte` and Kerby's `y`) at 106,228
 contractions interpreted and 28,832 compiled. A count is to weak head
 normal form, so a number pushed and not yet read costs nothing more on
 integers; the arithmetic is paid when the reader decodes it.
+
+*Stage 3: quotations as lists (2026-10-23).* A Joy quotation is a list,
+and its elements may be words: `[dup +] first` is the symbol `dup`, and
+consed back into a quotation and run, it runs `dup`. SKIlark's items gain
+a fourth kind, `Sym word`, beside `Num`, `Quot` and `Logical`; Joy's
+behaviour is the standard. The kernel gains `uncons null small`; `first
+rest swons unswons concat size at of take drop` are derived. The
+choices:
+
+- *An element is an item.* A literal element is its value, a nested
+  quotation a `Quot`, any other word a `Sym`; `wordOf` turns each back,
+  so `cons`, `unit` and `dip` restore exactly what `uncons` took apart.
+  `=` compares two symbols by name.
+- *Joy's `null` and `small` read a number as an aggregate of its size*:
+  `0 null` and `1 small` are true. `size`, `first` and the rest refuse a
+  number.
+- *`take` and `drop` stop at the end*, as Joy's reference implementation
+  does: `[1 2] 5 take` is `[1 2]` and `[1 2] 5 drop` is `[]`. `first` of
+  `[]` and `at` past the end are errors.
+- *Room in the dispatch.* `succ pred max min not and or` leave the
+  kernel for Joy's own definitions (`succ` is `1 +`, `max` is `over over
+  < [swap pop] [pop] branch`, `and` is `not not swap [] [pop false]
+  branch`), as `over`, `k` and `neg` are derived. The `not not` keeps
+  `and` and `or` refusing a non-truth value, as the words did. `word`
+  falls to 24 constructors, so the largest takes 25 arguments: seven
+  under Avon's cap.
+- *The compiled form reads lists only where a program does.* A program
+  with `uncons`, `null` or `small` gets `Sym` items, every suffix of each
+  static quotation hoisted as a static quotation of its own, a view
+  (`viewQ`) giving each one's first element and rest, and a dispatch
+  (`symRun`) that runs a symbol consed back into a quotation. `cat`'s
+  `[[P] i Q]` reads as P's elements, then Q's. Every other program
+  compiles as before: zk's verifiers keep their terms (`vsplitB` 23,475
+  atoms, `vcsplitB` 53,597).
+
+The interpreted kernel's `step` is 16,112 atoms, every case on an item
+one branch wider. Eighty programs and twenty-five laws pin the words in
+both forms, among them `A n take A n drop concat == A` and `x A cons
+uncons == x A`.
 
 ## 4. Risks
 
@@ -600,7 +639,9 @@ integers; the arithmetic is paid when the reader decodes it.
   word added re-pins every interpreted count, and the sums cannot grow
   without bound in Avon's terms: its constructor jets take at most 32
   arguments, and the largest, `Lit`, `Quote`, `Truth` and `Choose`, one
-  field of a 28-way sum, take 29. That is the
+  field of a 24-way sum, take 25. Stage 3 made room by deriving seven
+  words; stage 4 adds more, and past 31 constructors the sum splits in
+  two or Avon's cap rises. That is the
   intended story and the write-up says so before a reviewer does.
 - **`I` and `Cons` are reserved.** Joy's `i` is `Do`, its `cons` is
   `Qcons`; Kerby's `k` and `y` are `kComb` and `yComb` in the phase-1
@@ -609,7 +650,7 @@ integers; the arithmetic is paid when the reader decodes it.
   puts the level-1 runs at minutes each on the reference reducer; they
   are measured, recorded and gated behind `--runslow`, not run on every
   push. On Avon (`SKIJACK_REDUCER=avon`) the whole suite, these runs
-  included, takes 108 s.
+  included, takes 248 s.
 - **The name.** SKIlark is a working name.
 
 ## 5. Acceptance
