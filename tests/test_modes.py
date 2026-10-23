@@ -142,3 +142,16 @@ def test_each_law_holds_in_both_forms(laws, i):
     different quot values that apply to the same stack."""
     left, right = laws.run(f"ul{i}L")[0], laws.run(f"ul{i}R")[0]
     assert left == right and left[0] == "RVal", list(LAWS)[i]
+
+
+@pytest.mark.parametrize("make", [interpreted, compiled])
+def test_a_program_deeper_than_skijack_nests_spills_into_equations(make):
+    """SKIjack refuses an expression whose applications nest more than 256
+    deep, and a program nests about a level a word: past ``joy.SPILL``
+    levels a subexpression is an equation of its own."""
+    text = "1 " + "dup pop " * 150
+    src = (joy.interpreted if make is interpreted else joy.compiled)({"p": text})
+    lines = [line for line in src.split("\n") if line.startswith(("pp", "cp"))]
+    assert any("Spill1" in line for line in lines)
+    assert all(joy._app_depth(joy._tree(line.split("=", 1)[1])) <= joy.SPILL for line in lines)
+    assert make({"p": text}).run("up")[0] == ("RVal", [1])

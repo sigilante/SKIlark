@@ -820,6 +820,15 @@ and sets arrive as an item and the cases the kernel's words take for it.
   36,399,854. Forty-six programs and six laws pin the types
   in both forms (`tests/test_types.py`), and zk's sources stay byte for
   byte.
+- *Deep programs spill.* SKIjack refuses an expression whose
+  applications nest more than 256 deep, and a program nests about a
+  level a word, so inlined checks put a random program of a few
+  combinators past it. Past 240 levels the front end makes a
+  subexpression an equation of its own, of the same parameters: a
+  datum's has none and costs nothing at run time, and a compiled body's
+  takes `ap`. No pinned program spills; the deepest nests 174 levels. The model
+  keeps integers to 64 bits, as the reference's are, and calls a result
+  past them undefined, so the fuzz never squares a number without end.
 
 ## 4. Risks
 

@@ -53,7 +53,7 @@ def programs(seed: int, count: int) -> List[str]:
         p = program(rng)
         try:
             joyref.Joy(conform.OWN, steps=400).run(p)
-        except (RuntimeError, RecursionError):
+        except (RuntimeError, RecursionError, joyref.Undefined):
             continue
         out.append(p)
     return out

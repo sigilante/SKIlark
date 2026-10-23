@@ -29,6 +29,7 @@ Three generators take the same parsed program and return SKIjack source:
 from __future__ import annotations
 
 import pathlib
+import re
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 Token = Union[int, str, "Def", Tuple[str, object], List["Token"]]
@@ -465,6 +466,71 @@ def _uses_signs(progs: Iterable[Program]) -> bool:
                  or (isinstance(t, tuple) and t[0] == "C" and t[1] < 0))
 
 
+#: SKIjack refuses an expression whose applications nest more than 256
+#: deep, and a program nests about a level a word; past ``SPILL`` levels
+#: a subexpression becomes an equation of its own, of the equation's
+#: parameters (a datum has none, and costs nothing at run time)
+SPILL = 240
+
+
+def _tree(expr: str) -> list:
+    """An expression's tokens, a parenthesized group a list."""
+    stack: List[list] = [[]]
+    for t in re.findall(r"\(|\)|[^\s()]+", expr):
+        if t == "(":
+            stack.append([])
+        elif t == ")":
+            q = stack.pop()
+            stack[-1].append(q)
+        else:
+            stack[-1].append(t)
+    return stack[0]
+
+
+def _app_depth(node, d: int = 0) -> int:
+    """How deep the applications of ``node`` nest below depth ``d``, as
+    SKIjack counts them: ``f a b`` is ``(f a) b``, ``a`` two levels down."""
+    if isinstance(node, str):
+        return d
+    if len(node) == 1:
+        return _app_depth(node[0], d)
+    k = len(node) - 1
+    return max([_app_depth(node[0], d + k)]
+               + [_app_depth(a, d + k - i + 1) for i, a in enumerate(node[1:], 1)])
+
+
+def _text(node) -> str:
+    return node if isinstance(node, str) else "(" + " ".join(map(_text, node)) + ")"
+
+
+def spill(name: str, params: Sequence[str], expr: str) -> List[str]:
+    """``name params = expr`` (``name := expr`` without parameters) as
+    equations whose applications nest at most ``SPILL`` deep: on the way
+    to the deepest, the group ``SPILL // 2`` down is ``name`` and a
+    number, applied to the parameters."""
+    head = f"{name} {' '.join(params)} =" if params else f"{name} :="
+    root = _tree(expr)
+    if _app_depth(root) <= SPILL:
+        return [f"{head} {expr}"]
+    out: List[str] = []
+    n = 0
+    while _app_depth(root) > SPILL:
+        node, d = root, 0
+        while True:                        # down the deepest path
+            k = len(node) - 1
+            places = [(node[0], d + k)] + [(a, d + k - i + 1) for i, a in enumerate(node[1:], 1)]
+            j = max(range(len(places)), key=lambda i: _app_depth(*places[i]))
+            child, cd = places[j]
+            if isinstance(child, list) and cd >= SPILL // 2:
+                break
+            node, d = child, cd
+        n += 1
+        aux = f"{name}Spill{n}"
+        out.extend(spill(aux, params, " ".join(map(_text, child))))
+        node[j] = [aux, *params] if params else aux
+    return [f"{head} {' '.join(map(_text, root))}"] + out
+
+
 def _kernel() -> str:
     return (DIR / "kernel.ascii.ski").read_text(encoding="utf-8")
 
@@ -546,7 +612,7 @@ def interpreted(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     and ``uP`` (unfuelled)."""
     out = [_kernel(), "\n-- programs, from skilark.joy.interpreted\n"]
     for name, prog in _programs(programs, defs).items():
-        out.append(f"p{name} := {datum(prog)}\n")
+        out.extend(f"{line}\n" for line in spill(f"p{name}", [], datum(prog)))
         out.append(f"r{name} := exec fuel p{name} Empty\n")
         out.append(f"u{name} := execU p{name} Empty\n")
     return "".join(out)
@@ -1076,10 +1142,12 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     info = c.list_info()
     kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties(), text, types)
     out = [kernel, "\n-- static quotations, hoisted\n"]
-    out.extend(f"{b}\n" for b in bodies)
+    for b in bodies:
+        name, body = b.split(" ap = ", 1)
+        out.extend(f"{line}\n" for line in spill(name, ["ap"], body))
     out.append("\n-- programs, from skilark.joy.compiled\n")
     for name, body in tops.items():
-        out.append(f"c{name} ap = {body}\n")
+        out.extend(f"{line}\n" for line in spill(f"c{name}", ["ap"], body))
         out.append(f"r{name} := c{name} (apply fuel) Empty\n")
         out.append(f"u{name} := c{name} applyU Empty\n")
     return "".join(out)
