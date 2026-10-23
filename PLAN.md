@@ -155,23 +155,23 @@ programs, host contractions, unfuelled (`uP`) and fuelled (`rP`):
 
 | Joy | result | interpreted | fuelled | compiled | fuelled |
 |---|---|---|---|---|---|
-| `1 2 + dup +` | `6` | 5,337 | 5,326 | 668 | 668 |
-| `3 [dup +] i` | `6` | 5,050 | 5,039 | 636 | 650 |
-| `1 2 over` | `1 2 1` | 6,365 | 6,337 | 652 | 666 |
-| `1 [2] [3] k` | `1 3` | 8,186 | 8,133 | 872 | 900 |
-| `1 2 unit cons` | `[1 2]` | 3,585 | 3,581 | 273 | 273 |
-| `+` (empty stack) | `RErr` | 775 | 789 | 8 | 8 |
-| `3 sumto` | `6` | 98,772 | 94,702 | 18,100 | 17,701 |
-| `5 sumto` | `15` | 154,288 | 145,276 | 30,103 | 29,204 |
+| `1 2 + dup +` | `6` | 4,808 | 4,797 | 668 | 668 |
+| `3 [dup +] i` | `6` | 4,521 | 4,510 | 636 | 650 |
+| `1 2 over` | `1 2 1` | 5,546 | 5,518 | 652 | 666 |
+| `1 [2] [3] k` | `1 3` | 7,153 | 7,100 | 872 | 900 |
+| `1 2 unit cons` | `[1 2]` | 3,153 | 3,149 | 273 | 273 |
+| `+` (empty stack) | `RErr` | 674 | 688 | 8 | 8 |
+| `3 sumto` | `6` | 89,332 | 85,262 | 18,100 | 17,701 |
+| `5 sumto` | `15` | 140,114 | 131,102 | 30,103 | 29,204 |
 
-The counts are the kernel with Joy's stages 1 to 5 (§3), and
+The counts are the kernel with Joy's stages 1 to 6 (§3), and
 `sumto` is written with `ifte` and `pred`, since `ifz` has left the
 kernel: `[swap [0 =] [pop pop 0] [dup pred swap [swap i] dip +] ifte]
 y`. That puts integers and truth values into the compiled set too. On
 the basis kernel alone (`programs/basis.ascii.ski`), which §3's
 measurements run, with `sumto` by `ifz`, `1 2 + dup +` took 2,014
 interpreted and 493 compiled, and `5 sumto` 49,568 and 18,186, unfuelled:
-a `word` of 31 constructors, an `item` of six, a signed number and the
+a `word` of 27 constructors, an `item` of six, a signed number and the
 reference's comparison make every dispatch dearer.
 
 Fuel is one unit per word interpreted and one per quotation applied
@@ -236,16 +236,16 @@ contractions on the reference reducer:
 
 | form | program | fuel | top is 6? | top is 7? |
 |---|---|---|---|---|
-| interpreted | `1 2 + dup +` | 7,000 | yes, 40,205,700 | no, 40,256,126 |
-| interpreted | `1 2 + sq` | 7,000 | yes, 41,419,680 | no, 41,471,114 |
+| interpreted | `1 2 + dup +` | 7,000 | yes, 33,524,535 | no, 33,571,230 |
+| interpreted | `1 2 + sq` | 7,000 | yes, 34,659,638 | no, 34,707,341 |
 | compiled | `1 2 + dup +` | 1,500 | yes, 2,328,665 | no, 2,342,964 |
 | compiled | `1 2 + sq` | 1,500 | yes, 2,337,648 | no, 2,351,954 |
 
-Beside the level-0 counts of `1 2 + dup +` alone (5,337 interpreted,
+Beside the level-0 counts of `1 2 + dup +` alone (4,808 interpreted,
 493 compiled) the cost of virtualization is five to eight thousandfold:
 each emulated step walks and rebuilds a spine of thousands of atoms, and
 the interpreted form pays for its bigger term twice over. The
-interpreted rows are the kernel with Joy's stages 1 to 5, whose
+interpreted rows are the kernel with Joy's stages 1 to 6, whose
 larger `step` needs 7,000 units of the interpreter's fuel where the
 basis needed 3,000 (and took 8,796,212 and 9,477,119); the compiled
 rows compute on naturals, as these programs cannot go negative, and are
@@ -769,6 +769,24 @@ other quotations a combinator never runs would be checked. The ways on:
    `[[nullary] dip] dip branch`, so `Ifte` and `Choose` can leave: two
    slots, at the price of a stack copy for every test.
 
+*Stage 6: the sidestep (2026-10-24).* Sets and type tests fit under the
+cap with no change to Avon, in three steps: the literals merge (option
+3), the kernel gains Joy's `typeof`, from which the type tests derive,
+and sets arrive as an item and the cases the kernel's words take for it.
+
+- *One literal constructor.* `Lit int`, `Quote prog`, `Truth logical`,
+  `Glyph int` and `Text text` are `Lit item`: `word` has 27
+  constructors, its one-field ones take 28 arguments, and `step` is
+  31,506 atoms, from 33,231. `Lit` pushes any item, a symbol too, so
+  `dip` puts its item back with one `Lit` where a symbol needed a
+  quotation, `uncons` and `pop`. No outcome changes, in either form.
+  Every interpreted count falls: the 161 pinned programs take 9.3% fewer
+  contractions in all, each from 0.67 to 0.93 of its stage-5 count
+  (median 0.89); `[dup] first [1] dip`, which puts a symbol back, falls
+  most. The compiled form has no `word` and keeps its counts. The level-1 runs
+  fall from 40,205,700 and 41,419,680 contractions to 33,524,535 and
+  34,659,638.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per
@@ -789,10 +807,10 @@ other quotations a combinator never runs would be checked. The ways on:
   word added re-pins every interpreted count, and the sums cannot grow
   without bound in Avon's terms: its constructor jets take at most 32
   arguments, and the largest, the one-field constructors of a 31-way
-  sum, take 32: the cap. Stage 3 made room by deriving seven words and
-  stage 4 derived its thirteen combinators; sets need a 32nd
-  constructor, so the sum splits, its literals merge or Avon's cap rises
-  (§3, stage 5). That is the
+  sum, take 32: the cap. Stage 3 made room by deriving seven words,
+  stage 4 derived its thirteen combinators, and stage 6 merged the five
+  literals into one, leaving `word` at 27 constructors (§3, stage 6).
+  That is the
   intended story and the write-up says so before a reviewer does.
 - **`I` and `Cons` are reserved.** Joy's `i` is `Do`, its `cons` is
   `Qcons`; Kerby's `k` and `y` are `kComb` and `yComb` in the phase-1

@@ -49,8 +49,8 @@ class Run:
     readers for its data.
 
     Stacks are returned bottom to top, as Joy writes them.  A quotation
-    is read by its *form*: interpreted, as its list of words (a ``Lit``
-    as ``("Lit", n)``); compiled, extensionally, as ``("quot", outcome)``
+    is read by its *form*: interpreted, as its list of words (a literal by
+    its kind, an integer ``("Lit", n)``); compiled, extensionally, as ``("quot", outcome)``
     where the outcome is the quotation applied to the empty stack, since
     a defunctionalized quotation has no list to read.
     """
@@ -70,19 +70,36 @@ class Run:
         w, wf = peel(fields[0], self.t["word"], max_steps=STEPS)
         word: Any = w
         if wf:
-            if w == "Lit":
-                word = (w, self.number(wf[0]))
-            elif w == "Truth":
-                word = (w, peel(wf[0], self.t["logical"], max_steps=STEPS)[0] == "True")
-            elif w == "Def":
+            if w == "Def":
                 word = (w, self.name(wf[0]))
-            elif w == "Glyph":
+            elif w == "Lit" and "named" in self.t:  # the kernel's: Lit of an item
+                word = self.literal(wf[0])
+            elif w == "Lit":                        # phase 1's and the basis's
                 word = (w, self.number(wf[0]))
-            elif w == "Text":
-                word = (w, self.string(wf[0]))
             else:
                 word = (w, self.prog(wf[0]))
         return [word] + self.prog(fields[1])
+
+    #: a literal's reading by its item's kind: an integer is ``("Lit", n)``
+    _LITERALS = {"Num": "Lit", "Logical": "Truth", "Quot": "Quote", "Char": "Glyph",
+                 "Str": "Text"}
+
+    def literal(self, term) -> Tuple[str, Any]:
+        """The kernel's ``Lit`` word, by its item: ``("Lit", n)``,
+        ``("Truth", b)``, ``("Quote", words)``, ``("Glyph", n)`` or
+        ``("Text", s)``."""
+        kind, payload = peel(term, self.t["item"], max_steps=STEPS)
+        if kind == "Num" or kind == "Char":
+            v: Any = self.number(payload[0])
+        elif kind == "Logical":
+            v = peel(payload[0], self.t["logical"], max_steps=STEPS)[0] == "True"
+        elif kind == "Str":
+            v = self.string(payload[0])
+        elif kind == "Quot":
+            v = self.prog(payload[0])
+        else:
+            raise ValueError(f"no literal of kind {kind}")
+        return (self._LITERALS[kind], v)
 
     def symbol(self, term) -> str:
         """A symbol by its Joy name: interpreted, its word's (a ``Def``'s

@@ -26,7 +26,7 @@ text    === TNil | TCons int text
 item    === Num int | Quot prog | Logical logical | Sym word | Char int | Str text
 stack   === Empty | Push item stack
 named   === Named text prog
-word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit int | Quote prog | Add | Sub | Mul | Div | Rem | Eql | Lt | Truth logical | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Glyph int | Text text | Ord | Chr | Choose stack
+word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | Sub | Mul | Div | Rem | Eql | Lt | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Ord | Chr | Choose stack
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
 
@@ -80,12 +80,10 @@ catT y z = y |> { TNil z; TCons c r (TCons c (catT r z)) }
 truth x = x |> { Num z (flip (zero z)); Quot r (r |> { Done False; Then w p True }); Logical b b; Sym w True; Char c (flip (zero c)); Str z (z |> { TNil False; TCons c r True }) }
 cat p q = p |> { Done q; Then w r (Then w (cat r q)) }
 -- a quotation's element as an item, and back: a literal is its value, any
--- other word a symbol
-itemOf w = w |> { Glyph c (Char c); Text z (Str z); Ord (Sym w); Chr (Sym w); Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit n (Num n); Quote r (Quot r); Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Truth b (Logical b); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Stack (Sym w); Unstack (Sym w); Def d (Sym w); Choose v (Sym w) }
-wordOf a = a |> { Num n (Lit n); Quot r (Quote r); Logical b (Truth b); Sym w w; Char c (Glyph c); Str z (Text z) }
--- the words that push an item back: a symbol's word would run, so a
--- symbol comes back as the first element of a quotation of it
-pushBack a q = a |> { Num n (Then (Lit n) q); Quot r (Then (Quote r) q); Logical b (Then (Truth b) q); Sym w (Then (Quote (Then w Done)) (Then Uncons (Then Pop q))); Char c (Then (Glyph c) q); Str z (Then (Text z) q) }
+-- other word a symbol.  Lit pushes any item, a symbol too: dip puts its
+-- item back with Lit, so a symbol comes back as itself and does not run
+itemOf w = w |> { Ord (Sym w); Chr (Sym w); Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit a a; Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Stack (Sym w); Unstack (Sym w); Def d (Sym w); Choose v (Sym w) }
+wordOf a = a |> { Num n (Lit a); Quot r (Lit a); Logical b (Lit a); Sym w w; Char c (Lit a); Str z (Lit a) }
 -- the stack as a list, top first, and a list as the stack
 toProg s = s |> { Empty Done; Push a t (Then (wordOf a) (toProg t)) }
 fromProg r = r |> { Done Empty; Then w p (Push (itemOf w) (fromProg p)) }
@@ -157,7 +155,7 @@ cSlash := Neg n15
 cLt := Neg n2
 cEq := Neg n1
 cGt := Neg Zero
-nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit n TNil; Quote r TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Truth b TNil; Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n }); Glyph c TNil; Text z TNil; Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Choose v TNil }
+nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Choose v TNil }
 
 -- the words' results, x below y on the stack
 subZ n m = plus n (minus m)
@@ -189,10 +187,9 @@ steps cmp ex w q s = w |> {
   Qcons   (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex q (Push (Quot (Then (wordOf b) r)) u)) }); Logical c RErr; Sym y RErr; Char xc RErr; Str z (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot l RErr; Logical c RErr; Sym y RErr; Char c (ex q (Push (Str (TCons c z)) u)); Str xs RErr }) }) }) });
   Cat     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (b |> { Num m RErr; Quot l (ex q (Push (Quot (cat l r)) u)); Logical c RErr; Sym y RErr; Char xc RErr; Str xs RErr }) }); Logical c RErr; Sym y RErr; Char xc RErr; Str z (t |> { Empty RErr; Push b u (b |> { Num m RErr; Quot l RErr; Logical c RErr; Sym y RErr; Char xc RErr; Str y (ex q (Push (Str (catT y z)) u)) }) }) }) });
   Unit    (s |> { Empty RErr; Push a t (ex q (Push (Quot (Then (wordOf a) Done)) t)) });
-  Dip     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex (cat r (pushBack b q)) u) }); Logical c RErr; Sym y RErr; Char xc RErr; Str xs RErr }) });
+  Dip     (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; Push b u (ex (cat r (Then (Lit b) q)) u) }); Logical c RErr; Sym y RErr; Char xc RErr; Str xs RErr }) });
   Do      (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex (cat r q) t); Logical c RErr; Sym y RErr; Char xc RErr; Str xs RErr }) });
-  Lit n   (ex q (Push (Num n) s));
-  Quote r (ex q (Push (Quot r) s));
+  Lit a   (ex q (Push a s));
   Add     (num2c plus ex q s);
   Sub     (num2c subZ ex q s);
   Mul     (num2 mulI ex q s);
@@ -200,7 +197,6 @@ steps cmp ex w q s = w |> {
   Rem     (div2 remI ex q s);
   Eql     (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push (Logical (isSame (cmp b a))) u)) }) });
   Lt      (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push (Logical (isLess (cmp b a))) u)) }) });
-  Truth b (ex q (Push (Logical b) s));
   Branch  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (truth c |> { False (ex (cat f q) v); True (ex (cat r q) v) }) }); Logical d RErr; Sym y RErr; Char xc RErr; Str xs RErr }) }); Logical d RErr; Sym y RErr; Char xc RErr; Str xs RErr }) });
   Ifte    (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot f (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot r (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot l (ex (cat l (Then (Choose (Push (Quot f) (Push (Quot r) v))) q)) v); Logical d RErr; Sym y RErr; Char xc RErr; Str xs RErr }) }); Logical d RErr; Sym y RErr; Char xc RErr; Str xs RErr }) }); Logical d RErr; Sym y RErr; Char xc RErr; Str xs RErr }) });
   Uncons  (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (r |> { Done RErr; Then x p (ex q (Push (Quot p) (Push (itemOf x) t))) }); Logical c RErr; Sym y RErr; Char xc RErr; Str z (z |> { TNil RErr; TCons c r (ex q (Push (Str r) (Push (Char c) t))) }) }) });
@@ -209,8 +205,6 @@ steps cmp ex w q s = w |> {
   Stack   (ex q (Push (Quot (toProg s)) s));
   Unstack (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (fromProg r)); Logical c RErr; Sym y RErr; Char xc RErr; Str xs RErr }) });
   Def d   (d |> { Named n b (ex (cat b q) s) });
-  Glyph c (ex q (Push (Char c) s));
-  Text z  (ex q (Push (Str z) s));
   Ord     (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Num n) t)); Quot r RErr; Logical b (ex q (Push (Num (boolZ b)) t)); Sym y RErr; Char c (ex q (Push (Num c) t)); Str xs RErr }) });
   Chr     (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Char n) t)); Quot r RErr; Logical b (ex q (Push (Char (boolZ b)) t)); Sym y RErr; Char c (ex q (Push (Char c) t)); Str xs RErr }) });
   Choose w (s |> { Empty RErr; Push a t (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (truth a |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr }) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr }) }) }) }
