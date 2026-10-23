@@ -38,13 +38,16 @@ Program = List[Token]
 class Def:
     """A derived word inside a quotation: Joy reads it there as the symbol
     it names, and runs it as its body.  At the top of a program, or of a
-    body, a derived word is inlined, since nothing can read it there."""
+    body, a derived word is inlined, since nothing can read it there.
+    ``user`` when the program defines it, not Joy: ``typeof`` tells the
+    two apart."""
 
-    def __init__(self, name: str, body: "Program") -> None:
-        self.name, self.body = name, body
+    def __init__(self, name: str, body: "Program", user: bool = False) -> None:
+        self.name, self.body, self.user = name, body, user
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Def) and (self.name, self.body) == (other.name, other.body)
+        return isinstance(other, Def) and \
+            (self.name, self.body, self.user) == (other.name, other.body, other.user)
 
     def __repr__(self) -> str:
         return f"Def({self.name!r})"
@@ -60,6 +63,7 @@ KERNEL = {
     "true": "(Lit (Logical True))", "false": "(Lit (Logical False))",
     "uncons": "Uncons", "null": "Null", "small": "Small",
     "stack": "Stack", "unstack": "Unstack", "ord": "Ord", "chr": "Chr",
+    "typeof": "Typeof",
 }
 
 #: a kernel symbol's Joy name, by its constructor
@@ -89,15 +93,43 @@ SIGNED_WORDS = {"-", "/", "rem"}
 #: only when it uses one
 LIST_WORDS = {"uncons", "null", "small", "stack", "unstack"}
 
+#: A derived word's check of its arguments, as the reference's runtime.h
+#: makes it: ``[] [] +`` errs, since ``+`` takes no quotation, and it needs
+#: no list word.  SAME2TYPES: the top two of one type;
+#: NUMERICTYPE: a truth value, a character or an integer (types 4 to 6);
+#: a truth value as an integer; POSITIVEINDEX: an integer or a truth value
+#: (type 4 or 6), not negative, as an integer; a quotation on top.  None
+#: subtracts, so a program on naturals compiles on naturals.
+_SAME2 = "over typeof over typeof = [] [[] [] +] branch "
+_NUMERIC = "dup typeof dup 3 swap < [7 <] [pop false] branch [] [[] [] +] branch "
+_TOINT = "dup logical [[1] [0] branch] [] branch "
+_INDEX = ("dup typeof dup 4 = [pop true] [6 =] branch [] [[] [] +] branch " + _TOINT
+          + "dup 0 < [[] [] +] [] branch ")
+_QUOTE = "dup list [] [[] [] +] branch "
+_QUOTES = {1: _QUOTE, 2: f"{_QUOTE}[{_QUOTE}] dip ",
+           3: f"{_QUOTE}[{_QUOTE}] dip [[{_QUOTE}] dip] dip ",
+           4: f"{_QUOTE}[{_QUOTE}] dip [[{_QUOTE}] dip] dip [[[{_QUOTE}] dip] dip] dip "}
+#: map's result on a string is P's result as a C char: its code, modulo 256
+#: and signed
+_CCHAR = "ord 128 + 128 2 * rem 128 2 * + 128 2 * rem 128 - chr"
+
+#: map, with its string branch: a string's results become C chars
+_MAP = (_QUOTE + "[dup dup cat pop] dip {STRING}[[stack] dip] dip [swap] dip [infra first] cons "
+        "[cons] swap cat cons [i] cons unit [dip] cat [uncons] swap cat [[null] []] dip "
+        "[cons] linrec")
+_MAP_STRING = "over string [[" + _CCHAR + "] cat] [] branch "
+
 #: The derived words: Joy's, as the reference implementation (Wodan58/Joy)
 #: behaves, and Kerby's k and y.  A reference builtin derived here checks
-#: its arguments where the kernel words it is made of check them: the
-#: guards ``dup 0 * pop`` (an integer), ``dup ord pop`` (a number, a
-#: character or a truth value) and ``dup dup cat pop`` (an aggregate)
-#: restore checks a definition would otherwise skip.  The
-#: combinators take their quotations into the body ``y`` recurses on, so
-#: the stack they run on is the caller's; ``map`` and ``filter`` run each
-#: element on the caller's stack with ``infra``.
+#: its arguments where the reference does: the checks above, made of
+#: ``typeof``, and the guards ``dup 0 * pop`` (an integer) and ``dup dup
+#: cat pop`` (an aggregate) restore checks a definition would otherwise
+#: skip, and a combinator checks its quotations before it runs one.  The
+#: checks avoid ``ord``, which would give the compiled form of every
+#: program using them characters and strings.  The combinators
+#: take their quotations into the body ``y`` recurses on, so the stack
+#: they run on is the caller's; ``map`` and ``filter`` run each element on
+#: the caller's stack with ``infra``.
 DEFINITIONS = {
     # stack words
     "over": "[dup] dip swap",
@@ -118,23 +150,39 @@ DEFINITIONS = {
     "x": "dup i",
     # arithmetic
     "neg": "0 swap -",
-    "succ": "1 +",
-    "pred": "1 -",
+    "succ": _TOINT + "1 +",
+    "pred": _TOINT + "1 -",
     "abs": "dup 0 * pop dup 0 < [0 swap -] [] branch",
     "sign": "dup 0 * pop dup 0 < [pop -1] [0 = [0] [1] branch] branch",
-    "max": "dup ord pop over ord pop over over < [swap pop] [pop] branch",
-    "min": "dup ord pop over ord pop over over < [pop] [swap pop] branch",
+    "max": _SAME2 + _NUMERIC + "over over < [swap pop] [pop] branch " + _TOINT,
+    "min": _SAME2 + _NUMERIC + "over over < [pop] [swap pop] branch " + _TOINT,
     # comparison: = and < are the kernel's, and the others are what the
     # reference's comparison gives, which orders some values neither way
     ">": "over over < [pop pop false] [!=] branch",
     "<=": "over over < [pop pop true] [=] branch",
-    ">=": "< not",
-    "!=": "= not",
+    ">=": "< [false] [true] branch",
+    "!=": "= [false] [true] branch",
     # truth values: any value is one, zero and empty false
-    "not": "dup ord pop [false] [true] branch",
-    "and": "not not swap not not [] [pop false] branch",
-    "or": "not not swap not not [pop true] [] branch",
-    "xor": "dup ord pop over ord pop !=",
+    "not": _NUMERIC + "[false] [true] branch",
+    "and": _SAME2 + _NUMERIC + "[[true] [false] branch] [pop false] branch",
+    "or": _SAME2 + _NUMERIC + "[pop true] [[true] [false] branch] branch",
+    "xor": _SAME2 + _NUMERIC + "!=",
+    # types: Joy's typeof (globals.h), the tests made of it, and the
+    # types SKIlark has no value of
+    "integer": "typeof 6 =",
+    "char": "typeof 5 =",
+    "logical": "typeof 4 =",
+    "set": "typeof 7 =",
+    "string": "typeof 8 =",
+    "list": "typeof 9 =",
+    "leaf": "typeof 9 = [false] [true] branch",
+    "user": "typeof 2 =",
+    "float": "pop false",
+    "file": "pop false",
+    # sametype.c: a builtin symbol on top is the same type as the same
+    # builtin alone
+    "sametype": "dup typeof 3 = [over typeof 3 = [=] [pop pop false] branch] "
+                "[typeof swap typeof =] branch",
     # lists
     "first": "uncons pop",
     "rest": "uncons swap pop",
@@ -142,42 +190,75 @@ DEFINITIONS = {
     "unswons": "uncons swap",
     "concat": "cat",
     "size": "dup dup cat pop [swap [null] [pop pop 0] [rest swap i 1 +] ifte] y",
-    "drop": "dup 0 * pop dup 0 < [[] first] [] branch [dup dup cat pop] dip "
-            "[swap [[pop null] dip 0 = or] [pop pop] [pred swap [[rest] dip] dip i] ifte] y",
-    "take": "dup 0 * pop dup 0 < [[] first] [] branch [dup dup cat pop] dip "
-            "[swap [[pop null] dip 0 = or] [pop pop dup size drop] [pred [[uncons] dip] dip swap i cons] ifte] y",
+    "drop": _INDEX + "[dup dup cat pop] dip "
+            "[swap [[pop null] dip 0 = [pop true] [] branch] [pop pop] [pred swap [[rest] dip] dip i] ifte] y",
+    "take": _INDEX + "[dup dup cat pop] dip "
+            "[swap [[pop null] dip 0 = [pop true] [] branch] [pop pop dup size drop] [pred [[uncons] dip] dip swap i cons] ifte] y",
     "at": "drop first",
     "of": "swap at",
-    "has": "[=] cons filter null not",
+    "has": "[=] cons filter null [false] [true] branch",
     "in": "swap has",
     # the stack as data
     "nullary": "[stack] dip infra first",
     "infra": "[[stack] dip] dip [stack] cat rolldown unit cat [cons unstack] cat [unstack] dip i",
     # the recursion combinators
-    "times": "[dup 0 * pop] dip swap "
+    "times": _QUOTE + "[dup 0 * pop] dip swap "
              "[swap [0 >] [pred [[dup [i] dip] dip] dip swap i] [pop pop pop] ifte] y",
-    "while": "[[pop swap pop i] [swap pop swap [i] dip i] [pop pop pop] ifte] cons cons y",
-    "tailrec": "[[pop pop swap pop i] [pop swap pop swap pop i] "
+    "while": _QUOTES[2] + "[[pop swap pop i] [swap pop swap [i] dip i] [pop pop pop] ifte] cons cons y",
+    "tailrec": _QUOTES[3] + "[[pop pop swap pop i] [pop swap pop swap pop i] "
                "[swap pop swap pop swap [i] dip i] ifte] cons cons cons y",
-    "linrec": "[[pop pop pop swap pop i] [pop pop swap pop swap pop i] "
+    "linrec": _QUOTES[4] + "[[pop pop pop swap pop i] [pop pop swap pop swap pop i] "
               "[[[pop pop] dip] dip [i] swap cat [swap] dip cons cat i] ifte] cons cons cons cons y",
-    "binrec": "[[pop pop pop swap pop i] [pop pop swap pop swap pop i] "
+    "binrec": _QUOTES[4] + "[[pop pop pop swap pop i] [pop pop swap pop swap pop i] "
               "[[[pop pop] dip] dip [i] swap cat [swap] dip [dup] dip cons [dip] swap cat "
               "swap [i] cons swap cons cat i] ifte] cons cons cons cons y",
-    "genrec": "[[pop pop pop swap pop i] [pop pop swap pop swap pop i] "
+    "genrec": _QUOTES[4] + "[[pop pop pop swap pop i] [pop pop swap pop swap pop i] "
               "[[[pop pop] dip] dip rolldown [i] cons swap cons cat i] ifte] cons cons cons cons y",
-    "primrec": "[[pop] swap cat [0 > not] swap [dup 0 swap < [dup pred] [uncons] branch]] dip linrec",
-    "map": "[dup dup cat pop] dip [[stack] dip] dip [swap] dip [infra first] cons [cons] swap cat cons "
-           "[i] cons unit [dip] cat [uncons] swap cat [[null] []] dip [cons] linrec",
-    "filter": "[dup dup cat pop] dip [[stack] dip] dip [swap] dip [infra first] cons [cons] swap cat cons "
+    # primrec takes an integer or an aggregate, a type above 5
+    "primrec": _QUOTES[2] + "[[dup typeof 5 swap < [] [[] [] +] branch] dip] dip "
+               "[[pop] swap cat [dup integer [0 > not] [null] branch] swap "
+               "[dup integer [dup pred] [uncons] branch]] dip linrec",
+    "map": _MAP.format(STRING=_MAP_STRING),
+    "filter": _QUOTE + "[dup dup cat pop] dip [[stack] dip] dip [swap] dip [infra first] cons [cons] swap cat cons "
               "[i] cons [dup] swap cat unit [dip] cat [uncons] swap cat [[null] []] dip "
               "[swap [cons] [swap pop] branch] linrec",
-    "step": "[dup dup cat pop] dip [pop null] [pop pop] [[uncons] dip swap [dup [i] dip] dip swap] tailrec",
+    "step": _QUOTE + "[dup dup cat pop] dip [pop null] [pop pop] [[uncons] dip swap [dup [i] dip] dip swap] tailrec",
     "fold": "swapd step",
     # programs
     "sumto": "[swap [0 =] [pop pop 0] [dup pred swap [swap i] dip +] ifte] y",
     "fact": "[swap [0 =] [pop pop 1] [dup pred swap [swap i] dip *] ifte] y",
 }
+
+
+#: SKIlark's definitions that are not the reference's builtins: Kerby's
+#: words and the two programs.  The reference has them as user
+#: definitions, so ``typeof`` reads their symbols as user-defined, as it
+#: does every definition a program brings
+USER_WORDS = {"nip", "tuck", "rot", "sip", "k", "y", "sumto", "fact"}
+
+
+#: Joy's words with a second body, for a compiled program set no string
+#: reaches: only a string literal makes a string, and without one map's
+#: string branch, which would bring ord and chr, cannot run
+PLAIN = {"map": _MAP.format(STRING="")}
+
+
+def is_user(name: str, defs: Dict[str, str]) -> bool:
+    """Whether a derived word is the program's own: not one of Joy's, or
+    one of Joy's names with another body."""
+    return name in USER_WORDS or defs[name] not in (DEFINITIONS.get(name), PLAIN.get(name))
+
+
+def _is_string(t) -> bool:
+    return isinstance(t, tuple) and t[0] == "T"
+
+
+def plain(progs: Iterable[Program], defs: Dict[str, str]) -> Dict[str, str]:
+    """The definitions a compiled program set takes: Joy's plain bodies
+    where its programs have no string."""
+    if _walk(progs, _is_string):
+        return defs
+    return dict(defs, **{k: v for k, v in PLAIN.items() if defs.get(k) == DEFINITIONS[k]})
 
 
 # ------------------------------------------------------------------ parsing
@@ -285,7 +366,7 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
         elif isinstance(t, str) and t in defs and t not in keep:
             body = expand(parse(defs[t]), defs, keep)
             if quoted:
-                out.append(Def(t, body))
+                out.append(Def(t, body, is_user(t, defs)))
             else:
                 out.extend(body)
         elif (isinstance(t, str) and t not in KERNEL and t not in COMPILED_ONLY
@@ -434,7 +515,8 @@ def datum(prog: Program, basis: bool = False) -> str:
     if isinstance(t, Def):
         if basis:                       # the basis kernel has no symbols
             return datum(flatten(t.body) + list(prog[1:]), basis)
-        return f"Then (Def (Named {name_text(t.name)} ({datum(t.body)}))) ({rest})"
+        named = "User" if t.user else "Named"
+        return f"Then (Def ({named} {name_text(t.name)} ({datum(t.body)}))) ({rest})"
     if isinstance(t, int):
         if basis and t < 0:
             raise ValueError(f"the basis kernel has no negative numbers: {t}")
@@ -665,6 +747,20 @@ subZ n m = plus n (minus m)
 """
 
 
+#: a compiled program's ``typeof``, present only in a program that uses it
+COMPILED_TYPES = """
+-- Joy's typeof (globals.h): a user-defined symbol 2, any other 3, a truth
+-- value 4, a character 5, an integer 6, a string 8, a list 9
+kindOf a = a |> {{ Num n {K6}; Quot q {K9}{KLOG}{KSYM}{KTX} }}
+wTypeof s = s |> {{ Empty RErr; Push a t (RVal (Push (Num (kindOf a)) t)) }}
+{SYMKIND}"""
+
+
+def _uses_types(progs: Iterable[Program]) -> bool:
+    """Whether any program asks a value's type."""
+    return _walk(progs, lambda t: t == "typeof")
+
+
 class _Lists:
     """What a list-reading program's compiled kernel needs from its
     compiler: the symbols in the order of their names, their runs, and
@@ -682,15 +778,15 @@ _MANGLE = {"!": "Bang", "+": "Plus", "-": "Minus", "*": "Star", "/": "Slash",
            "<": "Lt", "=": "Eq", ">": "Gt"}
 
 
-def def_symbol(name: str) -> str:
+def def_symbol(name: str, user: bool = False) -> str:
     """A derived word's symbol constructor: ``size`` is ``Zsize``, ``!=``
-    is ``ZBangEq``."""
-    return "Z" + "".join(_MANGLE.get(c, c) for c in name)
+    is ``ZBangEq``, and a user definition's is ``U`` and its name."""
+    return ("U" if user else "Z") + "".join(_MANGLE.get(c, c) for c in name)
 
 
 def symbol_name(ctor: str) -> str:
     """A compiled symbol's Joy name: ``YDup`` is ``dup``, ``Zsize`` is
-    ``size``, ``ZBangEq`` is ``!=``."""
+    ``size``, ``ZBangEq`` is ``!=``, ``Usq`` is ``sq``."""
     if ctor.startswith("Y"):
         return "ifz" if ctor == "YIfz" else NAMES[ctor[1:]]
     out, rest = [], ctor[1:]
@@ -707,11 +803,12 @@ def symbol_name(ctor: str) -> str:
 
 def _compiled_kernel(n: int, truth: bool, signs: bool,
                      lists: "Optional[_Lists]" = None,
-                     empties: Sequence[bool] = (), text: bool = False) -> str:
+                     empties: Sequence[bool] = (), text: bool = False,
+                     types: bool = False) -> str:
     """The compiled kernel for ``n`` static quotations (``empties`` says
     which are empty), with truth values when ``truth``, integers when
-    ``signs`` (else naturals), the list words when ``lists``, and
-    characters and strings when ``text``."""
+    ``signs`` (else naturals), the list words when ``lists``, characters
+    and strings when ``text``, and ``typeof`` when ``types``."""
     tx = "; Char xc RErr; Str xs RErr" if text else ""
     lcnt = ("; Logical lg RErr" if truth else "") + ("; Sym sy RErr" if lists else "")
     ls = ("; Sym sy RErr" if lists else "") + tx
@@ -783,6 +880,18 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
             NUM2C=_TEXT_NUM2C.format(LC=lc, LCNT=lcnt) if signs else "",
             SYMTEXT=symtext)
         symtype = symtype + f"text   === TNil | TCons {'int' if signs else 'nat'} text\n"
+    types_block = ""
+    if types:
+        symkind = ""
+        if lists:
+            symkind = "symKind y = y |> { " + "; ".join(
+                f"{y} {lit(2 if y.startswith('U') else 3)}" for y in (lists.syms or ["YNone"])) + " }\n"
+        types_block = COMPILED_TYPES.format(
+            K6=lit(6), K9=lit(9),
+            KLOG=f"; Logical b {lit(4)}" if truth else "",
+            KSYM="; Sym y (symKind y)" if lists else "",
+            KTX=f"; Char c {lit(5)}; Str z {lit(8)}" if text else "",
+            SYMKIND=symkind)
     out = COMPILED_KERNEL.format(
         QUOTS="".join(f"Q{k} | " for k in range(1, n + 1)),
         CASES_F="".join(f"Q{i} (b{i} k s); " for i in range(1, n + 1)),
@@ -795,7 +904,7 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
         NUM="int" if signs else "nat",
         NUMBERS=numbers.format(LC=lc),
         TRUTH=truth_block,
-        LISTS=block + text_block)
+        LISTS=block + text_block + types_block)
     if text:
         lines = dict(_TEXT_LINES)
         if signs:
@@ -855,7 +964,7 @@ class _Compiler:
         if isinstance(t, tuple):
             return f"(Char {self.literal(t[1])})" if t[0] == "C" else f"(Str {self.text(t[1])})"
         if isinstance(t, Def):
-            ctor = def_symbol(t.name)
+            ctor = def_symbol(t.name, t.user)
             if ctor not in self.syms:
                 self.syms[ctor] = (t.name, "")
                 self.syms[ctor] = (t.name, f"{ctor} ({self.body(t.body, 'ap')})")
@@ -941,12 +1050,12 @@ class _Compiler:
 
 def _compile_set(progs: List[Program]):
     """What one program set compiles with: whether its numbers are
-    integers, whether it reads lists and whether it uses truth values (a
-    program reading lists does).  Without lists nothing reads a derived
+    integers, whether it reads lists, whether it uses truth values (a
+    program reading lists does), characters and ``typeof``.  Without lists nothing reads a derived
     word as a symbol, so its programs are flattened: they compile as they
     did before ``Def``."""
     signs, lists = _uses_signs(progs), _uses_lists(progs)
-    return signs, lists, lists or _uses_truth(progs), _uses_text(progs)
+    return signs, lists, lists or _uses_truth(progs), _uses_text(progs), _uses_types(progs)
 
 
 def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
@@ -955,7 +1064,8 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     ``rP`` (under ``apply fuel``, ``fuel`` a Church numeral) and ``uP``
     (under ``applyU``)."""
     progs = _programs(programs, defs)
-    signs, lists, truth, text = _compile_set(list(progs.values()))
+    progs = _programs(programs, plain(progs.values(), defs))
+    signs, lists, truth, text, types = _compile_set(list(progs.values()))
     if not lists:
         progs = {name: flatten(prog) for name, prog in progs.items()}
     c = _Compiler(signs, lists)
@@ -964,7 +1074,7 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
         c.quot([])
     bodies = c.hoist()
     info = c.list_info()
-    kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties(), text)
+    kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties(), text, types)
     out = [kernel, "\n-- static quotations, hoisted\n"]
     out.extend(f"{b}\n" for b in bodies)
     out.append("\n-- programs, from skilark.joy.compiled\n")
@@ -1069,7 +1179,10 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
         hoisted: List[str] = []
     elif form == "compiled":
         facts_progs = {n: expand(parse(defs[n]), defs) for n in keep}
-        signs, lists, truth, text = _compile_set(list(progs.values()) + list(facts_progs.values()))
+        defs = plain(list(_programs(programs, defs, keep).values()) + list(facts_progs.values()), defs)
+        progs = _programs(programs, defs, keep)
+        facts_progs = {n: expand(parse(defs[n]), defs) for n in keep}
+        signs, lists, truth, text, types = _compile_set(list(progs.values()) + list(facts_progs.values()))
         if not lists:
             progs = {name: flatten(prog) for name, prog in progs.items()}
             facts_progs = {n: flatten(prog) for n, prog in facts_progs.items()}
@@ -1079,7 +1192,7 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
         if lists:
             c.quot([])
         hoisted = c.hoist()
-        kernel = _compiled_kernel(len(c.quots), truth, signs, c.list_info(), c.empties(), text)
+        kernel = _compiled_kernel(len(c.quots), truth, signs, c.list_info(), c.empties(), text, types)
     else:
         raise ValueError(f"unknown form {form!r}")
     out = [kernel, "\n".join(hoisted) + ("\n" if hoisted else ""),

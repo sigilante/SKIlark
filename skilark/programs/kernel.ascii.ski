@@ -17,7 +17,8 @@
 -- tests take any value as a truth value, its comparisons order values of
 -- different kinds, and a symbol has a name, which `=` and `<` compare.
 -- A derived word inside a quotation is a `Def`, its name and its body: it
--- runs as its body and is read, as an element, as the symbol it names.
+-- runs as its body and is read, as an element, as the symbol it names,
+-- one of Joy's (`Named`) or one the program defines (`User`).
 nat     === Zero | Suc nat
 int     === Pos nat | Neg nat
 logical === False | True
@@ -25,8 +26,8 @@ order   === Less | Same | More
 text    === TNil | TCons int text
 item    === Num int | Quot prog | Logical logical | Sym word | Char int | Str text
 stack   === Empty | Push item stack
-named   === Named text prog
-word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | Sub | Mul | Div | Rem | Eql | Lt | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Ord | Chr | Choose stack
+named   === Named text prog | User text prog
+word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | Sub | Mul | Div | Rem | Eql | Lt | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Ord | Chr | Typeof | Choose stack
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
 
@@ -82,7 +83,7 @@ cat p q = p |> { Done q; Then w r (Then w (cat r q)) }
 -- a quotation's element as an item, and back: a literal is its value, any
 -- other word a symbol.  Lit pushes any item, a symbol too: dip puts its
 -- item back with Lit, so a symbol comes back as itself and does not run
-itemOf w = w |> { Ord (Sym w); Chr (Sym w); Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit a a; Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Stack (Sym w); Unstack (Sym w); Def d (Sym w); Choose v (Sym w) }
+itemOf w = w |> { Ord (Sym w); Chr (Sym w); Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit a a; Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Stack (Sym w); Unstack (Sym w); Def d (Sym w); Typeof (Sym w); Choose v (Sym w) }
 wordOf a = a |> { Num n (Lit a); Quot r (Lit a); Logical b (Lit a); Sym w w; Char c (Lit a); Str z (Lit a) }
 -- the stack as a list, top first, and a list as the stack
 toProg s = s |> { Empty Done; Push a t (Then (wordOf a) (toProg t)) }
@@ -155,7 +156,12 @@ cSlash := Neg n15
 cLt := Neg n2
 cEq := Neg n1
 cGt := Neg Zero
-nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Choose v TNil }
+nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Choose v TNil }
+
+-- Joy's typeof (globals.h): a user-defined symbol 2, any other 3, a truth
+-- value 4, a character 5, an integer 6, a string 8, a list 9
+kindOf a = a |> { Num z (Pos n6); Quot r (Pos n9); Logical b (Pos n4); Sym w (symKind w); Char c (Pos n5); Str z (Pos n8) }
+symKind w = w |> { Def d (d |> { Named n b (Pos n3); User n b (Pos n2) }); Dup (Pos n3); Swap (Pos n3); Pop (Pos n3); Qcons (Pos n3); Cat (Pos n3); Unit (Pos n3); Dip (Pos n3); Do (Pos n3); Lit a (Pos n3); Add (Pos n3); Sub (Pos n3); Mul (Pos n3); Div (Pos n3); Rem (Pos n3); Eql (Pos n3); Lt (Pos n3); Branch (Pos n3); Ifte (Pos n3); Uncons (Pos n3); Null (Pos n3); Small (Pos n3); Stack (Pos n3); Unstack (Pos n3); Ord (Pos n3); Chr (Pos n3); Typeof (Pos n3); Choose v (Pos n3) }
 
 -- the words' results, x below y on the stack
 subZ n m = plus n (minus m)
@@ -204,9 +210,10 @@ steps cmp ex w q s = w |> {
   Small   (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Logical (upToOne n)) t)); Quot r (ex q (Push (Logical (r |> { Done True; Then x p (p |> { Done True; Then x o False }) })) t)); Logical c (ex q (Push (Logical True) t)); Sym y RErr; Char c (ex q (Push (Logical (upToOne c)) t)); Str z (ex q (Push (Logical (z |> { TNil True; TCons c r (r |> { TNil True; TCons d o False }) })) t)) }) });
   Stack   (ex q (Push (Quot (toProg s)) s));
   Unstack (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (fromProg r)); Logical c RErr; Sym y RErr; Char xc RErr; Str xs RErr }) });
-  Def d   (d |> { Named n b (ex (cat b q) s) });
+  Def d   (d |> { Named n b (ex (cat b q) s); User n b (ex (cat b q) s) });
   Ord     (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Num n) t)); Quot r RErr; Logical b (ex q (Push (Num (boolZ b)) t)); Sym y RErr; Char c (ex q (Push (Num c) t)); Str xs RErr }) });
   Chr     (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Char n) t)); Quot r RErr; Logical b (ex q (Push (Char (boolZ b)) t)); Sym y RErr; Char c (ex q (Push (Char c) t)); Str xs RErr }) });
+  Typeof  (s |> { Empty RErr; Push a t (ex q (Push (Num (kindOf a)) t)) });
   Choose w (s |> { Empty RErr; Push a t (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (truth a |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr }) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr }) }) }) }
 
 -- The same loop without fuel, for level 1: there the interpreter's

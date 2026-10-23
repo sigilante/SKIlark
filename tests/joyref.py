@@ -707,6 +707,60 @@ class Joy:
     def w_fold(self, s):                # fold.c: swapd step
         self.params(s, 3); self.w_swapd(s); self.w_step(s)
 
+    # -- types (typeof.c, type.h, sametype.c; globals.h numbers them)
+
+    def kind(self, v: Value) -> int:
+        """``nodetype``: a symbol is a builtin (ANON_FUNCT_, 3) or a user
+        definition (USR_, 2), as the reader made it."""
+        if v[0] == "S":
+            return 3 if v[1] in self.b else 2
+        return {"B": 4, "C": 5, "N": 6, "Z": 7, "T": 8, "L": 9}[v[0]]
+
+    def w_typeof(self, s):
+        self.params(s, 1); s.append(("N", self.kind(s.pop())))
+
+    def type_test(self, s, test):       # type.h TYPE: ONEPARAM, then the test
+        self.params(s, 1); s.append(("B", test(self.kind(s.pop()))))
+
+    def w_integer(self, s):
+        self.type_test(s, lambda k: k == 6)
+
+    def w_char(self, s):
+        self.type_test(s, lambda k: k == 5)
+
+    def w_logical(self, s):
+        self.type_test(s, lambda k: k == 4)
+
+    def w_set(self, s):
+        self.type_test(s, lambda k: k == 7)
+
+    def w_string(self, s):
+        self.type_test(s, lambda k: k == 8)
+
+    def w_list(self, s):
+        self.type_test(s, lambda k: k == 9)
+
+    def w_leaf(self, s):
+        self.type_test(s, lambda k: k != 9)
+
+    def w_user(self, s):
+        self.type_test(s, lambda k: k == 2)
+
+    def w_float(self, s):               # no value here is a float or a file
+        self.type_test(s, lambda k: k == 10)
+
+    def w_file(self, s):
+        self.type_test(s, lambda k: k == 11)
+
+    def w_sametype(self, s):            # a builtin on top: the same builtin
+        self.params(s, 2)
+        y = s.pop(); x = s.pop()
+        if self.kind(y) == 3:
+            same = self.kind(x) == 3 and x[1] == y[1]
+        else:
+            same = self.kind(x) == self.kind(y)
+        s.append(("B", same))
+
     # -- SKIlark's own kernel words, from Kerby's basis: not Joy's, so the
     #    reference has them as definitions; these are what they define
 

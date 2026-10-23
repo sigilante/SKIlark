@@ -23,24 +23,24 @@ PROGRAMS = {
 
 #: outcome, then host contractions unfuelled (uP) and fuelled (rP)
 INTERPRETED = {
-    "p1": (('RVal', [6]), 4_808, 4_797),
-    "p2": (('RVal', [6]), 4_521, 4_510),
-    "p3": (('RVal', [1, 2, 1]), 5_546, 5_518),
-    "p4": (('RVal', [1, 3]), 7_153, 7_100),
-    "p5": (('RVal', [[('Lit', 1), ('Lit', 2)]]), 3_153, 3_149),
-    "p6": (('RErr', None), 674, 688),
-    "p7": (('RVal', [6]), 89_332, 85_262),
-    "p8": (('RVal', [15]), 140_114, 131_102),
+    "p1": (('RVal', [6]), 4_952, 4_941),
+    "p2": (('RVal', [6]), 4_665, 4_654),
+    "p3": (('RVal', [1, 2, 1]), 5_750, 5_722),
+    "p4": (('RVal', [1, 3]), 7_417, 7_364),
+    "p5": (('RVal', [[('Lit', 1), ('Lit', 2)]]), 3_269, 3_265),
+    "p6": (('RErr', None), 702, 716),
+    "p7": (('RVal', [6]), 114_900, 108_710),
+    "p8": (('RVal', [15]), 184_099, 169_770),
 }
 COMPILED = {
     "p1": (('RVal', [6]), 668, 668),
-    "p2": (('RVal', [6]), 636, 650),
-    "p3": (('RVal', [1, 2, 1]), 652, 666),
-    "p4": (('RVal', [1, 3]), 872, 900),
+    "p2": (('RVal', [6]), 684, 698),
+    "p3": (('RVal', [1, 2, 1]), 700, 714),
+    "p4": (('RVal', [1, 3]), 968, 996),
     "p5": (('RVal', [('quot', ('RVal', [1, 2]))]), 273, 273),
     "p6": (('RErr', None), 8, 8),
-    "p7": (('RVal', [6]), 18_100, 17_701),
-    "p8": (('RVal', [15]), 30_103, 29_204),
+    "p7": (('RVal', [6]), 24_043, 23_605),
+    "p8": (('RVal', [15]), 39_822, 38_824),
 }
 
 
@@ -79,7 +79,7 @@ def test_a_kept_name_survives_as_itself():
 
 def test_interpreted_kernel_sizes(interp):
     s = interp.e.sizes
-    assert (s["exec"], s["execU"], s["step"]) == (31_566, 31_570, 31_506)
+    assert (s["exec"], s["execU"], s["step"]) == (34_264, 34_268, 34_204)
 
 
 @pytest.mark.parametrize("name", sorted(PROGRAMS))
@@ -93,11 +93,11 @@ def test_interpreted_outcomes_and_counts(interp, name):
 
 def test_compiled_kernel_sizes(comp):
     s = comp.e.sizes
-    assert (s["apply"], s["applyU"], s["seq"]) == (6_744, 6_748, 42)
+    assert (s["apply"], s["applyU"], s["seq"]) == (10_560, 10_564, 42)
     # every static quotation is one constructor of quot with one body;
     # the three runtime constructors are what cons, unit and cat build
     static = sorted(k for k in s if k[0] == "Q" and k[1:].isdigit())
-    assert (len(static), s["b1"] > 0) == (11, True)
+    assert (len(static), s["b1"] > 0) == (15, True)
     assert all(k in s for k in ("QCons", "QUnit", "QThen"))
 
 
