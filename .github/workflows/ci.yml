@@ -46,10 +46,13 @@ jobs:
           SKIJACK_REDUCER: avon
 
   # The reference: every reduction run by aviary, the reference reducer,
-  # and by Avon, and compared; then the slow tests alone (the level-1
-  # measurements and the fuzz), which are slow in Python, on Avon.
+  # and by Avon, and compared, the suite split over four jobs
+  # (SKILARK_SHARD, tests/conftest.py).
   avon:
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        shard: ["1/4", "2/4", "3/4", "4/4"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -66,6 +69,24 @@ jobs:
         env:
           AVON: ${{ github.workspace }}/.avon/build/avon
           SKIJACK_REDUCER: check
+          SKILARK_SHARD: ${{ matrix.shard }}
+
+  # The slow tests alone (the level-1 measurements and the fuzz), which are
+  # slow in Python, on Avon.
+  slow:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: sigilante/avon
+          ref: ${{ env.AVON_REF }}
+          path: .avon
+      - run: make -C .avon -j4 CC=clang-18 build/avon
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[test]"
       - run: python -m pytest -q -n auto --runslow -m slow
         env:
           AVON: ${{ github.workspace }}/.avon/build/avon
