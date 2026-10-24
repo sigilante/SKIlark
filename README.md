@@ -28,8 +28,10 @@ namespace.
   it, and the tests check every pinned outcome against the model, but
   for three deviations pinned with their reason (`genrec`'s R2 and
   `treerec`'s and `treegenrec`'s C see a quotation, not the reference's
-  own word). `word` has 29 constructors,
-  under Avon's cap of 32 arguments (`PLAN.md` §3, stage 6).
+  own word). `word` has 30 constructors,
+  under Avon's cap of 32 arguments (`PLAN.md` §3, stage 6); the last,
+  `Ext ext`, holds the kernel's further words, `size` and `at` so far,
+  in a sum of their own (§3, stage 8).
   `basis.ascii.ski` is the basis alone, with
   SKIlark's own `ifz`, as phase 3 measured it.
 - `skilark/programs/joy.{ascii,unicode}.ski` — the kernel with a

@@ -7,8 +7,9 @@
 > the recursion combinators, characters, strings and sets, `typeof` and
 > the type tests; `ifz` retired), every word checked against the
 > reference implementation (§3, stage 4), with one deviation left
-> (`genrec`). `word` has 29 constructors, under Avon's cap of 32
-> arguments: stage 6 merged the literals to make room (§3, stage 6).
+> (`genrec`). `word` has 30 constructors, under Avon's cap of 32
+> arguments: stage 6 merged the literals to make room (§3, stage 6), and
+> stage 8 puts further kernel words in `ext`, a sum of their own.
 > `skilark/programs/` holds the kernel, the basis kernel phase 3 measured
 > and the phase-1 programs; `skilark/joy.py` is the front end in three
 > forms; `skilark/variants.py` is the basis kernel's loop and fuel in
@@ -237,8 +238,8 @@ contractions on the reference reducer:
 
 | form | program | fuel | top is 6? | top is 7? |
 |---|---|---|---|---|
-| interpreted | `1 2 + dup +` | 7,000 | yes, 40,555,362 | no, 40,607,048 |
-| interpreted | `1 2 + sq` | 7,000 | yes, 41,794,287 | no, 41,846,981 |
+| interpreted | `1 2 + dup +` | 7,000 | yes, 42,440,422 | no, 42,493,116 |
+| interpreted | `1 2 + sq` | 7,000 | yes, 43,700,623 | no, 43,754,325 |
 | compiled | `1 2 + dup +` | 1,500 | yes, 2,328,665 | no, 2,342,964 |
 | compiled | `1 2 + sq` | 1,500 | yes, 2,337,648 | no, 2,351,954 |
 
@@ -964,6 +965,38 @@ still refuses a zero divisor first. The kernel needs `skijack>=0.2.2`.
 pinned outcome changes; the three programs that divide (`2 rem` in
 `filter` and `split`) take 0.2% to 0.4% fewer contractions in each form,
 and `step` is 57,570 atoms, from 57,842.
+
+*Stage 8: the kernel's further words in `ext` (2026-10-25).* `word` had
+29 constructors of the 31 Avon's cap allows, and each word the kernel
+takes over from a derivation would spend one. Stage 8 spends one on all
+of them: `Ext ext` is `word`'s thirtieth constructor, and `ext`, a sum
+of its own, holds the kernel's further words, up to 31. The first are
+`size` and `at`, the list words Avon's data jets will take next; `step`
+cases on `Ext` and `exts` on the `ext`, one dispatch more for these
+words than for `word`'s own. A word in a quotation is read back as its
+name, `[size] first` the symbol `size`, of `typeof` 3, as before. The
+compiled form has no `word` sum and keeps deriving them, and a program's
+own `size` or `at` stays its own (`joy.kernel_defs`).
+
+`size` counts an aggregate's members and `at` takes the member at an
+index, an integer or a truth value, as the derivations did, and errs
+where they erred. Interpreted, on Avon:
+
+| program | derived | `ext` |
+|---|---:|---:|
+| `[1 2 3] size` | 82,459 | 1,895 |
+| `{1 5 9} size` | 82,249 | 1,885 |
+| `[4 5 6] 1 at` | 115,061 | 3,364 |
+| `"abc" 2 at` | 163,493 | 3,610 |
+| `[[1 2] [3]] [size] map` | 508,279 | 374,049 |
+| `[size] first` | 2,547 | 2,633 |
+
+No pinned outcome changes. The 363 pinned interpreted programs take
+10.6% fewer contractions at the geometric mean, and 46,528,801 in all,
+from 48,183,315; those that use `size` or `at` up to 58 times fewer, and
+those that use neither up to 3.8% more, a case on a wider `word`. `step`
+is 61,675 atoms, from 57,570, and the interpreted level-1 runs take
+42,440,422 and 43,700,623, 4.6% more. The compiled form is unchanged.
 
 ## 4. Risks
 

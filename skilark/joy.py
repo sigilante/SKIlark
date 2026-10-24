@@ -67,8 +67,13 @@ KERNEL = {
     "typeof": "Typeof", "not": "Not",
 }
 
+#: Joy's words the interpreted kernel runs as ext's constructors, under
+#: word's ``Ext`` (``programs/kernel.ascii.ski``); the compiled form, which
+#: has no word sum, derives them (``DEFINITIONS``)
+EXT = {"size": "Size", "at": "At"}
+
 #: a kernel symbol's Joy name, by its constructor
-NAMES = {v: k for k, v in KERNEL.items() if not v.startswith("(")}
+NAMES = {v: k for k, v in {**KERNEL, **EXT}.items() if not v.startswith("(")}
 
 #: ``ifz``, the Scott eliminator of a natural (``n [Z] [S] ifz``: Z at 0,
 #: else S with n - 1 pushed), is not Joy and has left the kernel; the
@@ -523,7 +528,7 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
             else:
                 out.extend(body)
         elif (isinstance(t, str) and t not in KERNEL and t not in COMPILED_ONLY
-              and t not in keep):
+              and t not in EXT and t not in keep):
             raise ValueError(f"unknown word {t!r}")
         else:
             out.append(t)
@@ -772,7 +777,15 @@ def datum(prog: Program, basis: bool = False) -> str:
         raise ValueError(f"{t!r} is not a Joy word; only the compiled form keeps it")
     if t in KERNEL:
         return f"Then {KERNEL[t]} ({rest})"
+    if t in EXT and not basis:
+        return f"Then (Ext {EXT[t]}) ({rest})"
     return f"cat ?^/{t} ({rest})"
+
+
+def kernel_defs(defs: Dict[str, str]) -> Dict[str, str]:
+    """The definitions the interpreted form takes: Joy's own ``EXT`` words
+    are the kernel's, and a program's own definition of one stays."""
+    return {k: v for k, v in defs.items() if not (k in EXT and v == DEFINITIONS[k])}
 
 
 def interpreted(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
@@ -780,7 +793,7 @@ def interpreted(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     """The kernel plus, for each program ``p``: ``pP``, ``rP`` (fuelled)
     and ``uP`` (unfuelled)."""
     out = [_kernel(), "\n-- programs, from skilark.joy.interpreted\n"]
-    for name, prog in _programs(programs, defs).items():
+    for name, prog in _programs(programs, kernel_defs(defs)).items():
         out.extend(f"{line}\n" for line in spill(f"p{name}", [], datum(prog)))
         out.append(f"r{name} := exec fuel p{name} Empty\n")
         out.append(f"u{name} := execU p{name} Empty\n")
@@ -1570,6 +1583,10 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
     keep = list(namespace)
     progs = _programs(programs, defs, keep)
     if form == "interpreted":
+        if set(keep) & set(EXT):
+            raise ValueError(f"{sorted(set(keep) & set(EXT))} are kernel words in the interpreted form")
+        defs = kernel_defs(defs)
+        progs = _programs(programs, defs, keep)
         kernel = _kernel()
         truth = signs = lists = text = sets = True
         facts = {n: datum(expand(parse(defs[n]), defs)) for n in keep}

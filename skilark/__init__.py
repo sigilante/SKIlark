@@ -71,6 +71,8 @@ class Run:
         if wf:
             if w == "Def":
                 word = (w, self.name(wf[0]))
+            elif w == "Ext":                        # ext's word, by its constructor
+                word = peel(wf[0], self.t["ext"], max_steps=STEPS)[0]
             elif w == "Lit" and "named" in self.t:  # the kernel's: Lit of an item
                 word = self.literal(wf[0])
             elif w == "Lit":                        # phase 1's and the basis's
@@ -109,6 +111,8 @@ class Run:
         if self.mode == "compiled":
             return joy.symbol_name(peel(term, self.t["sym"], max_steps=STEPS)[0])
         ctor, fields = peel(term, self.t["word"], max_steps=STEPS)
+        if ctor == "Ext":
+            ctor, _ = peel(fields[0], self.t["ext"], max_steps=STEPS)
         return self.name(fields[0]) if ctor == "Def" else joy.NAMES[ctor]
 
     def name(self, term) -> str:
