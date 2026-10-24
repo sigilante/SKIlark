@@ -9,6 +9,8 @@ on:
       - "img/**"
       - "LICENSE"
   pull_request:
+    # labeled: adding the `reference` label runs the reference job
+    types: [opened, synchronize, reopened, labeled]
     paths-ignore:
       - "**/*.md"
       - "img/**"
@@ -47,8 +49,12 @@ jobs:
 
   # The reference: every reduction run by aviary, the reference reducer,
   # and by Avon, and compared, the suite split over four jobs
-  # (SKILARK_SHARD, tests/conftest.py).
+  # (SKILARK_SHARD, tests/conftest.py).  The pinned outcomes and counts
+  # already hold Avon to aviary's numbers, so the reference runs on each
+  # push to master and on a pull request labelled `reference`: label one
+  # that changes the kernel, re-records pins, or moves Avon or skijack.
   avon:
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'reference')
     runs-on: ubuntu-24.04
     strategy:
       matrix:
