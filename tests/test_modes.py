@@ -155,3 +155,18 @@ def test_a_program_deeper_than_skijack_nests_spills_into_equations(make):
     assert any("Spill1" in line for line in lines)
     assert all(joy._app_depth(joy._tree(line.split("=", 1)[1])) <= joy.SPILL for line in lines)
     assert make({"p": text}).run("up")[0] == ("RVal", [1])
+
+
+def test_the_linear_abstraction_gives_aviarys_terms():
+    """skilark.abstraction.compile finds a node's free names once; the
+    terms it gives are those of aviary's own abstraction, hash for hash,
+    and aviary's free_vars is back when it returns."""
+    import aviary_kernel.abstraction as AB
+    import skijack
+    from skijack.dictionary import from_expansion
+    from skilark import abstraction
+    src = joy.compiled({"p": "{1 2} {2 3} and", "q": "'a 'b max"})
+    before = AB.free_vars
+    fast, slow = from_expansion(abstraction.compile(src)), from_expansion(skijack.compile(src))
+    assert AB.free_vars is before
+    assert {n: fast[n].hash for n in fast.names()} == {n: slow[n].hash for n in slow.names()}
