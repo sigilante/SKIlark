@@ -18,13 +18,12 @@ from __future__ import annotations
 import pathlib
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-import skijack
 from aviary_kernel.terms import App, Atom
 from skijack import ast as A
 from skijack.probe import Prober
 from skijack.run import decode, peel, run_level0, run_level1
 
-from . import joy
+from . import abstraction, joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
@@ -57,7 +56,7 @@ class Run:
 
     def __init__(self, source: str, mode: str, lexicon: str = "ascii"):
         self.source, self.mode, self.lexicon = source, mode, lexicon
-        self.e = skijack.compile(source, lexicon=lexicon)
+        self.e = abstraction.compile(source, lexicon=lexicon)
         self.pr = Prober(self.e)
         self.t = self.e.types
 

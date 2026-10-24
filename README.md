@@ -56,7 +56,7 @@ namespace.
 
 ```
 pip install -e ".[test]"
-python -m pytest -q              # the level-1 measurements need --runslow
+python -m pytest -q -n auto      # a test a core; the level-1 measurements need --runslow
 python -m skilark "3 [dup +] i"
 python -m skilark --define "sq == dup +" "1 2 + sq"
 python -m skilark "5 fact"                # by ifte and Kerby's y
@@ -85,13 +85,14 @@ then
 export AVON=/path/to/avon/build/avon
 python -m skilark --reducer avon  "3 [dup +] i"    # reduced by Avon
 python -m skilark --reducer check "3 [dup +] i"    # by both, compared
-SKIJACK_REDUCER=avon python -m pytest -q --runslow  # the suite, on Avon
+SKIJACK_REDUCER=avon python -m pytest -q -n auto --runslow  # the suite, on Avon
 ```
 
 Avon runs in its copy mode, the reference host's algorithm, so every
 contraction count above, and every one the tests pin, is the same on both.
 The reducer switch is SKIjack's (`SKIJACK_REDUCER`), from skijack 0.2.1,
-which SKIlark requires.
+which SKIlark requires. CI runs the suite on Avon on each Python, and once
+with every reduction checked against aviary (`SKIJACK_REDUCER=check`).
 
 ```python
 >>> from skilark import Joy, compiled
