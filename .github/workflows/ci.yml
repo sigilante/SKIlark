@@ -16,6 +16,12 @@ on:
       - "img/**"
       - "LICENSE"
 
+# A newer run of a pull request (a push, or a label added) cancels the one
+# before it; runs on master each finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Avon is pinned to the commit that runs natDiv and natRem natively;
 # skijack 0.2.2, from PyPI, has the reducer switch and those operations.
 # Every job runs a test a core (pytest-xdist).
