@@ -41,8 +41,8 @@ mul m n = m |> { Zero Zero; Suc i (n |> { Zero Zero; Suc j (natMul m n) }) }
 less m n = n |> { Zero False; Suc j (m |> { Zero True; Suc i (natIfLe (Suc m) n True False) }) }
 same m n = m |> { Zero (n |> { Zero True; Suc j False }); Suc i (n |> { Zero False; Suc j (natIfEq m n True False) }) }
 monus m n = m |> { Zero Zero; Suc i (n |> { Zero m; Suc j (natSub m n) }) }
-divN m n = less m n |> { False (Suc (divN (monus m n) n)); True Zero }
-remN m n = less m n |> { False (remN (monus m n) n); True m }
+divN m n = m |> { Zero Zero; Suc i (n |> { Zero Zero; Suc j (natDiv m n) }) }
+remN m n = m |> { Zero Zero; Suc i (n |> { Zero m; Suc j (natRem m n) }) }
 -- truth values
 flip a = a |> { False True; True False }
 -- integers: -k, m - n of naturals, the magnitude.  An operation cases on

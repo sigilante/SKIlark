@@ -14,11 +14,11 @@ on:
       - "img/**"
       - "LICENSE"
 
-# Avon is pinned to the commit that has `batch --dag`; skijack 0.2.1, from
-# PyPI, has the reducer switch.  Every job runs a test a core
-# (pytest-xdist).
+# Avon is pinned to the commit that runs natDiv and natRem natively;
+# skijack 0.2.2, from PyPI, has the reducer switch and those operations.
+# Every job runs a test a core (pytest-xdist).
 env:
-  AVON_REF: 65ae1a5b24d9813566cfd2eb38f8c01707da8259      # sigilante/avon #60, batch --dag
+  AVON_REF: d826c644d390f67363af95dfc2db83dc6473ee98      # sigilante/avon #71, natDiv and natRem
 
 jobs:
   # The suite on each Python, its reductions on Avon, which the reference

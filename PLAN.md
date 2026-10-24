@@ -935,10 +935,9 @@ loop of subtractions until skijack has `natDiv` and `natRem`.
 
 Without the cases, an operation on a computed number declines and runs
 as its term: `200 200 * 199 200 * -` took 398,959 steps. `200 200 *`
-spends what it spends printing 40,000 in unary; division is a loop of
-native subtractions and tests (11,430 of them) until skijack has `natDiv`
-and `natRem` (skijack #25, Avon #70: `100 7 /` in one operation, 148
-steps).
+spends what it spends printing 40,000 in unary; division here is a loop
+of native subtractions and tests (11,430 of them), which the next
+paragraph replaces.
 
 On aviary, which runs the operations as their terms, no pinned outcome
 changes and the 363 pinned programs take 3.5% more interpreted
@@ -947,6 +946,24 @@ before); `step` is 57,842 atoms, from 45,016, and the interpreted
 level-1 runs take 40,555,362 and 41,794,287. A computed number reads
 back slower, so the reader gives a numeral the cap it gives a constructor
 (5,000,000 contractions), not skijack's 200,000.
+
+*Division on `natDiv` and `natRem` (2026-10-25).* skijack 0.2.2 adds the
+two operations (skijack #25), total as its others are (by zero, 0 and the
+dividend), and Avon runs them natively (Avon #70). `divN` and `remN` case
+on their numerals and call them, as the other operations do; `div2`
+still refuses a zero divisor first. The kernel needs `skijack>=0.2.2`.
+
+| program, to normal form, Avon with templates and data | before | after | operations |
+|---|---:|---:|---:|
+| `100 7 /` | 431 | 153 | 1 |
+| `200 200 * 7 /` | 131,564 | 22,986 | 2 |
+| `200 200 * 7 rem` | 108,716 | 138 | 2 |
+| `0 200 200 * - 7 /` | 131,596 | 23,018 | 2 |
+
+`200 200 * 7 /` spends the rest building 5,714 in unary. On aviary no
+pinned outcome changes; the three programs that divide (`2 rem` in
+`filter` and `split`) take 0.2% to 0.4% fewer contractions in each form,
+and `step` is 57,570 atoms, from 57,842.
 
 ## 4. Risks
 
