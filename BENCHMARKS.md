@@ -168,19 +168,21 @@ share mode with templates and data jets, to normal form:
 
 | program | before | after | native operations |
 |---|---:|---:|---:|
-| `200 200 *` | 8,360,924 | 160,087 | 1 |
-| `200 200 * 7 /` | 8,607,178 | 291,607 | 5,715 |
-| `200 200 * 199 <` | 84,363 | 127 | 3 |
-| `200 200 * 199 200 * -` | 16,520,814 | 398,959 | 3 |
-| `6 fact` | 13,548 | 13,232 | 37 |
-| `30 sumto` | 17,805 | 16,915 | 181 |
-| `[1 2 3] [dup *] map` | 6,409 | 5,870 | 12 |
+| `200 200 *` | 8,360,924 | 160,092 | 1 |
+| `200 200 * 7 /` | 8,607,178 | 131,564 | 11,430 |
+| `200 200 * 199 <` | 84,363 | 136 | 3 |
+| `200 200 * 199 200 * -` | 16,520,814 | 962 | 4 |
+| `6 fact` | 13,548 | 5,980 | 30 |
+| `30 sumto` | 17,805 | 15,750 | 149 |
+| `[1 2 3] [dup *] map` | 6,409 | 5,913 | 12 |
 
+Each operation cases on its numerals first: an operation fires natively
+only on words, and without the cases `200 200 * 199 200 * -` took 398,959.
 On aviary, which runs the operations as their terms: the 363 pinned
-programs take 3.4% more interpreted contractions and 0.2% more compiled;
-`step` is 54,986 atoms, from 45,016. Division is still a loop of native
-subtractions (5,715 of them above) until skijack has `natDiv` and
-`natRem`.
+programs take 3.5% more interpreted contractions and 0.5% more compiled;
+`step` is 57,842 atoms, from 45,016. Division is still a loop of native
+subtractions until SKIlark takes up skijack's `natDiv` and `natRem`
+(skijack #25, Avon #70), with skijack's next release.
 
 ## Room left
 
