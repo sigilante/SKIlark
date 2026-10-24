@@ -64,7 +64,7 @@ KERNEL = {
     "true": "(Lit (Logical True))", "false": "(Lit (Logical False))",
     "uncons": "Uncons", "null": "Null", "small": "Small",
     "stack": "Stack", "unstack": "Unstack", "ord": "Ord", "chr": "Chr",
-    "typeof": "Typeof",
+    "typeof": "Typeof", "not": "Not",
 }
 
 #: a kernel symbol's Joy name, by its constructor
@@ -82,7 +82,7 @@ APPLYING = ("i", "dip", "ifz", "branch", "ifte")
 
 #: the words that make or test a truth value; a compiled program carries
 #: truth values on its stack only when it uses one
-TRUTH_WORDS = {"=", "<", "branch", "ifte", "true", "false", "null", "small"}
+TRUTH_WORDS = {"=", "<", "branch", "ifte", "true", "false", "null", "small", "not"}
 
 #: the words that can make a negative number; a compiled program without
 #: one of them or a negative literal computes on naturals, which give it
@@ -114,11 +114,41 @@ _QUOTES = {1: _QUOTE, 2: f"{_QUOTE}[{_QUOTE}] dip ",
 #: and signed
 _CCHAR = "ord 128 + 128 2 * rem 128 2 * + 128 2 * rem 128 - chr"
 
-#: map, with its string branch: a string's results become C chars
-_MAP = (_QUOTE + "[dup dup cat pop] dip {STRING}[[stack] dip] dip [swap] dip [infra first] cons "
+#: map, with its string and set branches: a string's results become C
+#: chars, a set's integers
+_MAP = (_QUOTE + "[dup dup cat pop] dip {STRING}{SET}[[stack] dip] dip [swap] dip [infra first] cons "
         "[cons] swap cat cons [i] cons unit [dip] cat [uncons] swap cat [[null] []] dip "
         "[cons] linrec")
 _MAP_STRING = "over string [[" + _CCHAR + "] cat] [] branch "
+_MAP_SET = "over set [[" + _TOINT + "] cat] [] branch "
+
+#: The derived words that take a set: (their check, the test that sends a
+#: set its own way, the set's body, every other value's body).  A set is
+#: Joy's: intersection, union, symmetric difference and complement, the
+#: member test, and comprel.h's subset order for > and >=.  The kernel's
+#: not is the complement, and concat the union, so the intersection is
+#: not X or not Y, complemented, and the symmetric difference X - Y or
+#: Y - X, each difference not (not X or Y).
+_EITHER_SET = "over set over set [pop true] [] branch "
+_SETS = {
+    "and": (_SAME2, "dup set ", "not swap not concat not",
+            _NUMERIC + "[[true] [false] branch] [pop false] branch"),
+    "or": (_SAME2, "dup set ", "concat", _NUMERIC + "[pop true] [[true] [false] branch] branch"),
+    "xor": (_SAME2, "dup set ", "over over [not] dip concat not rollup not concat not concat",
+            _NUMERIC + "!="),
+    "has": ("", "over set ", "over cons =", "[=] cons filter null not"),
+    ">": ("", _EITHER_SET, "swap <", "over over < [pop pop false] [!=] branch"),
+    ">=": ("", _EITHER_SET, "swap <=", "< not"),
+}
+
+
+def _body(name: str, strings: bool = True, sets: bool = True) -> str:
+    """A word's body, with its string and set branches or without."""
+    if name == "map":
+        return _MAP.format(STRING=_MAP_STRING if strings else "", SET=_MAP_SET if sets else "")
+    check, test, set_body, other = _SETS[name]
+    return check + (f"{test}[{set_body}] [{other}] branch" if sets else other)
+
 
 #: The derived words: Joy's, as the reference implementation (Wodan58/Joy)
 #: behaves, and Kerby's k and y.  A reference builtin derived here checks
@@ -159,15 +189,15 @@ DEFINITIONS = {
     "min": _SAME2 + _NUMERIC + "over over < [pop] [swap pop] branch " + _TOINT,
     # comparison: = and < are the kernel's, and the others are what the
     # reference's comparison gives, which orders some values neither way
-    ">": "over over < [pop pop false] [!=] branch",
+    ">": _body(">"),
     "<=": "over over < [pop pop true] [=] branch",
-    ">=": "< [false] [true] branch",
-    "!=": "= [false] [true] branch",
-    # truth values: any value is one, zero and empty false
-    "not": _NUMERIC + "[false] [true] branch",
-    "and": _SAME2 + _NUMERIC + "[[true] [false] branch] [pop false] branch",
-    "or": _SAME2 + _NUMERIC + "[pop true] [[true] [false] branch] branch",
-    "xor": _SAME2 + _NUMERIC + "!=",
+    ">=": _body(">="),
+    "!=": "= not",
+    # truth values: any value is one, zero and empty false; not is the
+    # kernel's
+    "and": _body("and"),
+    "or": _body("or"),
+    "xor": _body("xor"),
     # types: Joy's typeof (globals.h), the tests made of it, and the
     # types SKIlark has no value of
     "integer": "typeof 6 =",
@@ -176,7 +206,7 @@ DEFINITIONS = {
     "set": "typeof 7 =",
     "string": "typeof 8 =",
     "list": "typeof 9 =",
-    "leaf": "typeof 9 = [false] [true] branch",
+    "leaf": "typeof 9 = not",
     "user": "typeof 2 =",
     "float": "pop false",
     "file": "pop false",
@@ -197,14 +227,14 @@ DEFINITIONS = {
             "[swap [[pop null] dip 0 = [pop true] [] branch] [pop pop dup size drop] [pred [[uncons] dip] dip swap i cons] ifte] y",
     "at": "drop first",
     "of": "swap at",
-    "has": "[=] cons filter null [false] [true] branch",
+    "has": _body("has"),
     "in": "swap has",
     # the stack as data
     "nullary": "[stack] dip infra first",
     "infra": "[[stack] dip] dip [stack] cat rolldown unit cat [cons unstack] cat [unstack] dip i",
     # the recursion combinators
     "times": _QUOTE + "[dup 0 * pop] dip swap "
-             "[swap [0 >] [pred [[dup [i] dip] dip] dip swap i] [pop pop pop] ifte] y",
+             "[swap [0 swap <] [1 - [[dup [i] dip] dip] dip swap i] [pop pop pop] ifte] y",
     "while": _QUOTES[2] + "[[pop swap pop i] [swap pop swap [i] dip i] [pop pop pop] ifte] cons cons y",
     "tailrec": _QUOTES[3] + "[[pop pop swap pop i] [pop swap pop swap pop i] "
                "[swap pop swap pop swap [i] dip i] ifte] cons cons cons y",
@@ -215,11 +245,12 @@ DEFINITIONS = {
               "swap [i] cons swap cons cat i] ifte] cons cons cons cons y",
     "genrec": _QUOTES[4] + "[[pop pop pop swap pop i] [pop pop swap pop swap pop i] "
               "[[[pop pop] dip] dip rolldown [i] cons swap cons cat i] ifte] cons cons cons cons y",
+    # times and primrec count an integer down, by the kernel's < and -;
     # primrec takes an integer or an aggregate, a type above 5
     "primrec": _QUOTES[2] + "[[dup typeof 5 swap < [] [[] [] +] branch] dip] dip "
-               "[[pop] swap cat [dup integer [0 > not] [null] branch] swap "
-               "[dup integer [dup pred] [uncons] branch]] dip linrec",
-    "map": _MAP.format(STRING=_MAP_STRING),
+               "[[pop] swap cat [dup integer [0 swap < not] [null] branch] swap "
+               "[dup integer [dup 1 -] [uncons] branch]] dip linrec",
+    "map": _body("map"),
     "filter": _QUOTE + "[dup dup cat pop] dip [[stack] dip] dip [swap] dip [infra first] cons [cons] swap cat cons "
               "[i] cons [dup] swap cat unit [dip] cat [uncons] swap cat [[null] []] dip "
               "[swap [cons] [swap pop] branch] linrec",
@@ -238,16 +269,19 @@ DEFINITIONS = {
 USER_WORDS = {"nip", "tuck", "rot", "sip", "k", "y", "sumto", "fact"}
 
 
-#: Joy's words with a second body, for a compiled program set no string
-#: reaches: only a string literal makes a string, and without one map's
-#: string branch, which would bring ord and chr, cannot run
-PLAIN = {"map": _MAP.format(STRING="")}
+#: Joy's words with a branch only a string or a set reaches, and the
+#: bodies a compiled program set takes: a string literal alone makes a
+#: string, and a set literal a set, so without one the branch cannot run
+#: and leaves out what it would bring (ord and chr, the list words)
+PLAIN = {name: {_body(name, strings, sets) for strings in (False, True) for sets in (False, True)}
+         for name in ["map", *_SETS]}
 
 
 def is_user(name: str, defs: Dict[str, str]) -> bool:
     """Whether a derived word is the program's own: not one of Joy's, or
     one of Joy's names with another body."""
-    return name in USER_WORDS or defs[name] not in (DEFINITIONS.get(name), PLAIN.get(name))
+    return name in USER_WORDS or (defs[name] != DEFINITIONS.get(name)
+                                  and defs[name] not in PLAIN.get(name, ()))
 
 
 def _is_string(t) -> bool:
@@ -255,11 +289,12 @@ def _is_string(t) -> bool:
 
 
 def plain(progs: Iterable[Program], defs: Dict[str, str]) -> Dict[str, str]:
-    """The definitions a compiled program set takes: Joy's plain bodies
-    where its programs have no string."""
-    if _walk(progs, _is_string):
-        return defs
-    return dict(defs, **{k: v for k, v in PLAIN.items() if defs.get(k) == DEFINITIONS[k]})
+    """The definitions a compiled program set takes: Joy's bodies without
+    the branches no string or no set of its programs reaches."""
+    progs = list(progs)
+    strings, sets = _walk(progs, _is_string), _uses_sets(progs)
+    return dict(defs, **{k: _body(k, strings, sets) for k in PLAIN
+                         if defs.get(k) == DEFINITIONS[k]})
 
 
 # ------------------------------------------------------------------ parsing
@@ -285,23 +320,48 @@ def _escape(text: str, i: int) -> Tuple[int, int]:
     return ord(c), i + 1
 
 
+#: a set's members are the integers 0 to 63 (globals.h SETSIZE)
+SETSIZE = 64
+
+
+def _set_literal(members: Program) -> Tuple[str, Tuple[int, ...]]:
+    """A set literal's members, as the reference's reader takes them
+    (factor.c ``list2set``): integers or characters, 0 to 63."""
+    codes = []
+    for t in members:
+        if isinstance(t, int):
+            code = t
+        elif isinstance(t, tuple) and t[0] == "C":
+            code = t[1]
+        else:
+            raise ValueError(f"a set holds integers and characters, not {t!r}")
+        if not 0 <= code < SETSIZE:
+            raise ValueError(f"a set's member is 0 to {SETSIZE - 1}, not {code}")
+        codes.append(code)
+    return ("Z", tuple(sorted(set(codes))))
+
+
 def parse(text: str) -> Program:
     """``"3 [dup +] i"`` -> ``[3, ['dup', '+'], 'i']``; a character
-    ``'a`` is ``("C", 97)`` and a string ``"ab"`` is ``("T", (97, 98))``."""
+    ``'a`` is ``("C", 97)``, a string ``"ab"`` is ``("T", (97, 98))`` and
+    a set ``{2 1}`` is ``("Z", (1, 2))``."""
     stack: List[Program] = [[]]
+    opens: List[str] = []
     i = 0
     while i < len(text):
         c = text[i]
         if c.isspace():
             i += 1
-        elif c == "[":
+        elif c in "[{":
             stack.append([])
+            opens.append(c)
             i += 1
-        elif c == "]":
-            if len(stack) == 1:
-                raise ValueError("unbalanced ']'")
+        elif c in "]}":
+            if not opens or opens[-1] != "[{"["]}".index(c)]:
+                raise ValueError(f"unbalanced {c!r}")
+            opens.pop()
             q = stack.pop()
-            stack[-1].append(q)
+            stack[-1].append(q if c == "]" else _set_literal(q))
             i += 1
         elif c == "'":
             if i + 1 >= len(text):
@@ -328,7 +388,7 @@ def parse(text: str) -> Program:
             i += 1
         else:
             j = i
-            while j < len(text) and not text[j].isspace() and text[j] not in "[]":
+            while j < len(text) and not text[j].isspace() and text[j] not in "[]{}":
                 j += 1
             t = text[i:j]
             i = j
@@ -336,8 +396,8 @@ def parse(text: str) -> Program:
                 stack[-1].append(int(t))
             else:
                 stack[-1].append(t)
-    if len(stack) != 1:
-        raise ValueError("unbalanced '['")
+    if opens:
+        raise ValueError(f"unbalanced {opens[-1]!r}")
     return stack[0]
 
 
@@ -379,10 +439,12 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
 
 
 def literal_text(t: Tuple[str, object]) -> str:
-    """A character or string literal back as Joy text, every character a
-    decimal escape."""
+    """A character, string or set literal back as Joy text, every
+    character a decimal escape."""
     if t[0] == "C":
         return f"'\\{t[1]:03d}"
+    if t[0] == "Z":
+        return "{" + " ".join(map(str, t[1])) + "}"
     return '"' + "".join(f"\\{c:03d}" for c in t[1]) + '"'
 
 
@@ -456,7 +518,12 @@ TEXT_WORDS = {"chr", "ord"}
 
 def _uses_text(progs: Iterable[Program]) -> bool:
     """Whether any program has a character or a string."""
-    return _walk(progs, lambda t: isinstance(t, tuple) or t in TEXT_WORDS)
+    return _walk(progs, lambda t: (isinstance(t, tuple) and t[0] in "CT") or t in TEXT_WORDS)
+
+
+def _uses_sets(progs: Iterable[Program]) -> bool:
+    """Whether any program has a set: only a set literal makes one."""
+    return _walk(progs, lambda t: isinstance(t, tuple) and t[0] == "Z")
 
 
 def _uses_signs(progs: Iterable[Program]) -> bool:
@@ -570,6 +637,14 @@ def codes_text(codes: Sequence[int]) -> str:
     return out
 
 
+def set_text(members: Sequence[int]) -> str:
+    """A set's members, ascending, as the kernel's ``set``."""
+    out = "SNil"
+    for m in sorted(members, reverse=True):
+        out = f"(SCons {nat(m)} {out})"
+    return out
+
+
 def datum(prog: Program, basis: bool = False) -> str:
     """A program as a ``prog`` expression; a kept name is a scry.  A
     literal is ``Lit`` of its item.  With ``basis``, for the basis kernel
@@ -596,6 +671,8 @@ def datum(prog: Program, basis: bool = False) -> str:
             raise ValueError("the basis kernel has no characters")
         if t[0] == "C":
             return f"Then (Lit (Char {integer(t[1])})) ({rest})"
+        if t[0] == "Z":
+            return f"Then (Lit (Set {set_text(t[1])})) ({rest})"
         return f"Then (Lit (Str {codes_text(t[1])})) ({rest})"
     if basis and t == "ifz":
         return f"Then Ifz ({rest})"
@@ -813,7 +890,45 @@ subZ n m = plus n (minus m)
 """
 
 
-#: a compiled program's ``typeof``, present only in a program that uses it
+#: a compiled program's not, present only in a program that uses it:
+#: logical negation of a number, a character or a truth value, and a
+#: set's complement
+COMPILED_NOT = """
+wNot s = s |> {{ Empty RErr; Push a t (a |> {{ Num n (RVal (Push (Logical (zero n)) t)); Quot q RErr; Logical b (RVal (Push (Logical (negate b)) t)){NOTSYM}{NOTTX}{NOTSET} }}) }}
+"""
+
+#: a compiled program's sets, present only in a program with a set
+#: literal, which alone makes a set: as the interpreted kernel's, members
+#: ascending, and the lines below in place of the kernel's
+COMPILED_SETS = """
+-- sets: members ascending, 0 to 63; the union and subset order merge the
+-- members, the complement counts k to 63, c numbers left
+ltN m n = n |> {{ Zero False; Suc j (m |> {{ Zero True; Suc i (ltN i j) }}) }}
+eqN m n = m |> {{ Zero (n |> {{ Zero True; Suc j False }}); Suc i (n |> {{ Zero False; Suc j (eqN i j) }}) }}
+insS x s = s |> {{ SNil (SCons x SNil); SCons y t (cmpN x y |> {{ Less (SCons x (SCons y t)); Same (SCons y t); More (SCons y (insS x t)) }}) }}
+unionS s t = s |> {{ SNil t; SCons x r (t |> {{ SNil (SCons x r); SCons y u (cmpN x y |> {{ Less (SCons x (unionS r (SCons y u))); Same (SCons x (unionS r u)); More (SCons y (unionS (SCons x r) u)) }}) }}) }}
+subS s t = s |> {{ SNil True; SCons x r (t |> {{ SNil False; SCons y u (cmpN x y |> {{ Less False; Same (subS r u); More (subS (SCons x r) u) }}) }}) }}
+eqS s t = s |> {{ SNil (t |> {{ SNil True; SCons y u False }}); SCons x r (t |> {{ SNil False; SCons y u (eqN x y |> {{ True (eqS r u); False False }}) }}) }}
+odd m = m |> {{ Zero False; Suc j (negate (odd j)) }}
+half m = m |> {{ Zero Zero; Suc j (j |> {{ Zero Zero; Suc i (Suc (half i)) }}) }}
+bitsN k m = m |> {{ Zero SNil; Suc j (odd m |> {{ True (SCons k (bitsN (Suc k) (half m))); False (bitsN (Suc k) (half m)) }}) }}
+complS k c s = c |> {{ Zero SNil; Suc d (s |> {{ SNil (SCons k (complS (Suc k) d SNil)); SCons x t (eqN k x |> {{ True (complS (Suc k) d t); False (SCons k (complS (Suc k) d (SCons x t))) }}) }}) }}
+eight := Suc (Suc (Suc five))
+n64 := mul eight eight
+compl s = complS Zero n64 s
+{BITSI}
+boolS b = b |> {{ False SNil; True (SCons Zero SNil) }}
+isSet x = x |> {{ Num n False; Quot q False; Logical b False; Sym y False{ISTX}; Set z True }}
+bitsOf x = x |> {{ Num n (bitsI n); Quot q SNil; Logical b (boolS b); Sym y SNil{BITSTX}; Set z z }}
+-- a set and a number are the same when the number's 64 bits, two's
+-- complement, are the set's members; < is the proper subset of the bits
+-- when either is a set (comprel.h SETCMP)
+setC x y = eqS (bitsOf x) (bitsOf y) |> {{ True Same; False More }}
+lessI x y = (isSet x |> {{ True True; False (isSet y) }}) |> {{ True (both (negate (eqS (bitsOf x) (bitsOf y))) (subS (bitsOf x) (bitsOf y))); False (isLess (compare x y)) }}
+{SETCONS}
+wSet z s = RVal (Push (Set z) s)
+"""
+
 COMPILED_TYPES = """
 -- Joy's typeof (globals.h): a user-defined symbol 2, any other 3, a truth
 -- value 4, a character 5, an integer 6, a string 8, a list 9
@@ -870,14 +985,16 @@ def symbol_name(ctor: str) -> str:
 def _compiled_kernel(n: int, truth: bool, signs: bool,
                      lists: "Optional[_Lists]" = None,
                      empties: Sequence[bool] = (), text: bool = False,
-                     types: bool = False) -> str:
+                     types: bool = False, sets: bool = False, nots: bool = False) -> str:
     """The compiled kernel for ``n`` static quotations (``empties`` says
     which are empty), with truth values when ``truth``, integers when
     ``signs`` (else naturals), the list words when ``lists``, characters
-    and strings when ``text``, and ``typeof`` when ``types``."""
+    and strings when ``text``, ``typeof`` when ``types``, sets when
+    ``sets`` (which come with lists) and ``not`` when ``nots``."""
     tx = "; Char xc RErr; Str xs RErr" if text else ""
-    lcnt = ("; Logical lg RErr" if truth else "") + ("; Sym sy RErr" if lists else "")
-    ls = ("; Sym sy RErr" if lists else "") + tx
+    st = "; Set st RErr" if sets else ""
+    lcnt = ("; Logical lg RErr" if truth else "") + ("; Sym sy RErr" if lists else "") + st
+    ls = ("; Sym sy RErr" if lists else "") + tx + st
     lc = lcnt + tx
     lit = (lambda k: integer(k)) if signs else nat
     numbers = COMPILED_INTEGERS if signs else COMPILED_NATURALS
@@ -898,7 +1015,7 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
             TXSMALL=("; Char c (RVal (Push (Logical (upToOne c)) t)); Str z (RVal (Push "
                      "(Logical (z |> { TNil True; TCons c r (r |> { TNil True; TCons d o False }) })) t))")
             if text else "",
-            TX=tx)
+            TX=tx + st)
         symtype = f"sym    === {' | '.join(syms)}\n"
     else:
         cons_f, unit_f = "(k r (Push x s))", "(RVal (Push x s))"
@@ -958,19 +1075,37 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
             KSYM="; Sym y (symKind y)" if lists else "",
             KTX=f"; Char c {lit(5)}; Str z {lit(8)}" if text else "",
             SYMKIND=symkind)
+    not_block = ""
+    if nots:
+        not_block = COMPILED_NOT.format(
+            NOTSYM="; Sym y RErr" if lists else "",
+            NOTTX="; Char c (RVal (Push (Logical (zero c)) t)); Str z RErr" if text else "",
+            NOTSET="; Set z (RVal (Push (Set (compl z)) t))" if sets else "")
+    sets_block = ""
+    if sets:
+        symtype = symtype + "set    === SNil | SCons nat set\n"
+        sets_block = COMPILED_SETS.format(
+            BITSI=("bitsI z = z |> { Pos m (bitsN Zero m); Neg m (compl (bitsN Zero m)) }"
+                   if signs else "bitsI m = bitsN Zero m"),
+            ISTX="; Char c False; Str z False" if text else "",
+            BITSTX="; Char c (bitsI c); Str z SNil" if text else "",
+            SETCONS=("setCons n z u = n |> { Pos m (ltN m n64 |> { True (RVal (Push (Set (insS m z)) u)); "
+                     "False RErr }); Neg m RErr }" if signs else
+                     "setCons n z u = ltN n n64 |> { True (RVal (Push (Set (insS n z)) u)); False RErr }"))
     out = COMPILED_KERNEL.format(
         QUOTS="".join(f"Q{k} | " for k in range(1, n + 1)),
         CASES_F="".join(f"Q{i} (b{i} k s); " for i in range(1, n + 1)),
         CASES_U="".join(f"Q{k} (b{k} applyU s); " for k in range(1, n + 1)),
         LITEM=(" | Logical logical" if truth else "") + (" | Sym sym" if lists else "")
-        + (f" | Char {'int' if signs else 'nat'} | Str text" if text else ""),
+        + (f" | Char {'int' if signs else 'nat'} | Str text" if text else "")
+        + (" | Set set" if sets else ""),
         LC=lc, SYMTYPE=symtype,
         CONS_F=cons_f, UNIT_F=unit_f, CONS_U=cons_u, UNIT_U=unit_u,
         INTTYPE="int    === Pos nat | Neg nat\n" if signs else "",
         NUM="int" if signs else "nat",
         NUMBERS=numbers.format(LC=lc),
         TRUTH=truth_block,
-        LISTS=block + text_block + types_block)
+        LISTS=block + text_block + types_block + not_block + sets_block)
     if text:
         lines = dict(_TEXT_LINES)
         if signs:
@@ -979,7 +1114,101 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
         else:
             lines["wAdd s = "] = _TEXT_ADD_NATURALS
         out = "\n".join(_text_line(line, lines, lc, lcnt) for line in out.split("\n"))
+    if sets:
+        out = "\n".join(_set_line(line, text, signs) for line in out.split("\n"))
     return out
+
+
+#: the compiled kernel's lines a program with sets extends: a set's
+#: branch, put in before the line's closing braces
+_SET_BRANCHES = {
+    "nullish x = ": ("; Set z (z |> { SNil True; SCons m r False })", " }"),
+    "truth x = ": ("; Set z (z |> { SNil False; SCons m r True })", " }"),
+    "catEmpty eq x r = ": ("; Set z False", " }) }"),
+    "consRun k x r s = ": ("; Set z (k r (Push x s))", " }"),
+    "catView vq x r = ": ("; Set z (VCons x r)", " }) }"),
+    "wSmall s = ": ("; Set z (RVal (Push (Logical (z |> { SNil True; SCons m r "
+                    "(r |> { SNil True; SCons k o False }) })) t))", " }) }"),
+    "wOrd s = ": ("; Set st RErr", " }) }"),
+    "wChr s = ": ("; Set st RErr", " }) }"),
+    "kindOf a = ": ("; Set z {K7}", " }"),
+}
+
+
+def _cmp_line(text: bool) -> str:
+    """The comparison of two items, sets among them (compare.h): as the
+    kernel's without sets, and a set the same as a number or a set whose
+    bits are its members."""
+    kinds = ["Num", "Quot", "Logical", "Sym"] + (["Char", "Str"] if text else []) + ["Set"]
+    xv = {"Num": "xm", "Quot": "xq", "Logical": "xb", "Sym": "xz", "Char": "xc", "Str": "xs", "Set": "xe"}
+    yv = {"Num": "yn", "Quot": "yq", "Logical": "yb", "Sym": "yw", "Char": "yc", "Str": "ys", "Set": "ye"}
+    num = {"Num": lambda v: v, "Logical": lambda v: f"(boolZ {v})", "Char": lambda v: v}
+
+    def cmp(a: str, b: str) -> str:
+        x, y = xv[a], yv[b]
+        if "Set" in (a, b) and {a, b} <= {"Num", "Logical", "Char", "Set"}:
+            return "(setC x y)"
+        if a in num and b in num:
+            return f"(cmpZ {num[a](x)} {num[b](y)})"
+        if a == b == "Sym":
+            return f"(cmpN (symNo {x}) (symNo {y}))"
+        if (a, b) == ("Sym", "Str"):
+            return f"(cmpT (symText {x}) {y})"
+        if (a, b) == ("Str", "Sym"):
+            return f"(cmpT {x} (symText {y}))"
+        if a == b == "Str":
+            return f"(cmpT {x} {y})"
+        return "More"
+
+    def case(a: str) -> str:
+        if a == "Quot":
+            return "Quot xq More"
+        ys = "; ".join(f"{b} {yv[b]} {cmp(a, b)}" for b in kinds)
+        return f"{a} {xv[a]} (y |> {{ {ys} }})"
+    return "cmpI x y = x |> { " + "; ".join(case(a) for a in kinds) + " }"
+
+
+def _set_line(line: str, text: bool, signs: bool) -> str:
+    """A compiled kernel line, or its form in a program with sets."""
+    tx = "; Char xc RErr; Str xs RErr" if text else ""
+    m = "(Pos m)" if signs else "m"
+    if line.startswith("wQcons s = "):
+        onto_str = ("; Char xc RErr; Str z (t |> { Empty RErr; Push b u (b |> { Num n RErr; Quot q RErr; "
+                    "Logical lg RErr; Sym sy RErr; Char c (RVal (Push (Str (TCons c z)) u)); Str xs RErr; "
+                    "Set st RErr }) })") if text else ""
+        return ("wQcons s = s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; "
+                "Push b u (RVal (Push (Quot (QCons b r)) u)) }); Logical lg RErr; Sym sy RErr" + onto_str
+                + "; Set z (t |> { Empty RErr; Push b u (b |> { Num n (setCons n z u); Quot q RErr; "
+                "Logical lg RErr; Sym sy RErr" + ("; Char c (setCons c z u); Str xs RErr" if text else "")
+                + "; Set st RErr }) }) }) }")
+    if line.startswith("wCat s = "):
+        strings = ("; Char xc RErr; Str z (t |> { Empty RErr; Push b u (b |> { Num m RErr; Quot l RErr; "
+                   "Logical lg RErr; Sym sy RErr; Char xc RErr; Str y (RVal (Push (Str (catT y z)) u)); "
+                   "Set st RErr }) })") if text else ""
+        return ("wCat s = s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (t |> { Empty RErr; "
+                "Push b u (b |> { Num m RErr; Quot l (RVal (Push (Quot (QCons (Quot l) (QThen r))) u)); "
+                "Logical lg RErr; Sym sy RErr" + tx + "; Set st RErr }) }); Logical lg RErr; Sym sy RErr"
+                + strings + "; Set z (t |> { Empty RErr; Push b u (b |> { Num m RErr; Quot l RErr; "
+                "Logical lg RErr; Sym sy RErr" + tx + "; Set y (RVal (Push (Set (unionS y z)) u)) }) }) }) }")
+    if line.startswith("cmpI x y = "):
+        return _cmp_line(text)
+    if line.startswith("wLt s = "):
+        assert line.count("(isLess (compare b a))") == 1
+        return line.replace("(isLess (compare b a))", "(lessI b a)")
+    if line.startswith("wUncons s = "):
+        return _set_branch(line, f"; Set z (z |> {{ SNil RErr; SCons m r (RVal (Push (Set r) (Push (Num {m}) t))) }})",
+                           " }) }")
+    for prefix, (branch, end) in _SET_BRANCHES.items():
+        if line.startswith(prefix):
+            return _set_branch(line, branch.replace("{K7}", integer(7) if signs else nat(7)), end)
+    return line
+
+
+def _set_branch(line: str, branch: str, end: str) -> str:
+    """A line's case with a set's branch put in before ``end``."""
+    if not line.endswith(end):
+        raise AssertionError(f"a set line does not end as expected: {line[:60]!r}")
+    return line[:-len(end)] + branch + end
 
 
 def _text_line(line: str, lines: Dict[str, str], lc: str, lcnt: str) -> str:
@@ -1028,6 +1257,8 @@ class _Compiler:
         if t in ("true", "false"):
             return f"(Logical {t.capitalize()})"
         if isinstance(t, tuple):
+            if t[0] == "Z":
+                return f"(Set {set_text(t[1])})"
             return f"(Char {self.literal(t[1])})" if t[0] == "C" else f"(Str {self.text(t[1])})"
         if isinstance(t, Def):
             ctor = def_symbol(t.name, t.user)
@@ -1086,6 +1317,8 @@ class _Compiler:
         if isinstance(t, list):
             return f"(wQuote {self.quot(t)})"
         if isinstance(t, tuple):
+            if t[0] == "Z":
+                return f"(wSet {set_text(t[1])})"
             return f"(wGlyph {self.literal(t[1])})" if t[0] == "C" else f"(wText {self.text(t[1])})"
         if t == "ifz":
             if self.signs:
@@ -1117,11 +1350,14 @@ class _Compiler:
 def _compile_set(progs: List[Program]):
     """What one program set compiles with: whether its numbers are
     integers, whether it reads lists, whether it uses truth values (a
-    program reading lists does), characters and ``typeof``.  Without lists nothing reads a derived
+    program reading lists does), characters, ``typeof``, sets (which bring
+    the list words) and ``not``.  Without lists nothing reads a derived
     word as a symbol, so its programs are flattened: they compile as they
     did before ``Def``."""
-    signs, lists = _uses_signs(progs), _uses_lists(progs)
-    return signs, lists, lists or _uses_truth(progs), _uses_text(progs), _uses_types(progs)
+    signs, sets = _uses_signs(progs), _uses_sets(progs)
+    lists = sets or _uses_lists(progs)
+    return (signs, lists, lists or _uses_truth(progs), _uses_text(progs), _uses_types(progs),
+            sets, _walk(progs, lambda t: t == "not"))
 
 
 def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
@@ -1131,7 +1367,7 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     (under ``applyU``)."""
     progs = _programs(programs, defs)
     progs = _programs(programs, plain(progs.values(), defs))
-    signs, lists, truth, text, types = _compile_set(list(progs.values()))
+    signs, lists, truth, text, types, sets, nots = _compile_set(list(progs.values()))
     if not lists:
         progs = {name: flatten(prog) for name, prog in progs.items()}
     c = _Compiler(signs, lists)
@@ -1140,7 +1376,7 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
         c.quot([])
     bodies = c.hoist()
     info = c.list_info()
-    kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties(), text, types)
+    kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties(), text, types, sets, nots)
     out = [kernel, "\n-- static quotations, hoisted\n"]
     for b in bodies:
         name, body = b.split(" ap = ", 1)
@@ -1206,21 +1442,23 @@ topIs v r = r |> {{ RVal s (s |> {{ Empty (S S); Push a t (a |> {{ Num n {TEST};
 """
 
 
-def level1_reader(truth: bool, signs: bool, lists: bool = False, text: bool = False) -> str:
+def level1_reader(truth: bool, signs: bool, lists: bool = False, text: bool = False,
+                  sets: bool = False) -> str:
     """The level-1 reader for a kernel whose items include truth values
     when ``truth`` (a truth value on top answers ``S S K``), whose numbers
     are integers when ``signs`` (a negative is not the natural asked for),
-    whose items include symbols when ``lists`` (``S S I``), and characters
-    and strings when ``text`` (``S K S`` and ``S S S``)."""
+    whose items include symbols when ``lists`` (``S S I``), characters
+    and strings when ``text`` (``S K S`` and ``S S S``), and sets when
+    ``sets`` (``S I K``)."""
     test = "(n |> {{ Pos m (eqNat m v); Neg m (K I) }})" if signs else "(eqNat n v)"
     lc = (("; Logical b (S S K)" if truth else "") + ("; Sym y (S S I)" if lists else "")
-          + ("; Char c (S K S); Str z (S S S)" if text else ""))
+          + ("; Char c (S K S); Str z (S S S)" if text else "") + ("; Set z (S I K)" if sets else ""))
     return _LEVEL1_READER.format(LC=lc, TEST=test.format())
 
 
 #: the reader for the interpreted kernel: truth values, integers, symbols,
-#: characters and strings
-LEVEL1_READER = level1_reader(True, True, True, True)
+#: characters, strings and sets
+LEVEL1_READER = level1_reader(True, True, True, True, True)
 
 
 def level1(programs: Dict[str, str], namespace: Sequence[str],
@@ -1241,7 +1479,7 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
     progs = _programs(programs, defs, keep)
     if form == "interpreted":
         kernel = _kernel()
-        truth = signs = lists = text = True
+        truth = signs = lists = text = sets = True
         facts = {n: datum(expand(parse(defs[n]), defs)) for n in keep}
         runs = {name: f"execU ({datum(prog)}) Empty" for name, prog in progs.items()}
         hoisted: List[str] = []
@@ -1250,7 +1488,8 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
         defs = plain(list(_programs(programs, defs, keep).values()) + list(facts_progs.values()), defs)
         progs = _programs(programs, defs, keep)
         facts_progs = {n: expand(parse(defs[n]), defs) for n in keep}
-        signs, lists, truth, text, types = _compile_set(list(progs.values()) + list(facts_progs.values()))
+        signs, lists, truth, text, types, sets, nots = _compile_set(
+            list(progs.values()) + list(facts_progs.values()))
         if not lists:
             progs = {name: flatten(prog) for name, prog in progs.items()}
             facts_progs = {n: flatten(prog) for n, prog in facts_progs.items()}
@@ -1260,12 +1499,13 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
         if lists:
             c.quot([])
         hoisted = c.hoist()
-        kernel = _compiled_kernel(len(c.quots), truth, signs, c.list_info(), c.empties(), text, types)
+        kernel = _compiled_kernel(len(c.quots), truth, signs, c.list_info(), c.empties(), text, types,
+                                  sets, nots)
     else:
         raise ValueError(f"unknown form {form!r}")
     out = [kernel, "\n".join(hoisted) + ("\n" if hoisted else ""),
            LEVEL1_KERNEL.format(SEGS=" | ".join(segment(n) for n in keep)),
-           level1_reader(truth, signs, lists, text),
+           level1_reader(truth, signs, lists, text, sets),
            "\ndict := ns{" + ", ".join(f"/{n} => <{v}>" for n, v in facts.items()) + "}\n",
            f"\n-- programs, from skilark.joy.level1 ({form} form)\n"]
     for name, run in runs.items():

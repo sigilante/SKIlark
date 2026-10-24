@@ -16,11 +16,13 @@ import joyref
 
 VALUES = ["0", "1", "2", "3", "-1", "-2", "true", "false", "[]", "[1]", "[1 2]", "[2 1 3]",
           "[[1] [2 3]]", "[dup]", "[true 0]", "[dup] first", "[size] first",
+          "{}", "{1}", "{1 2}", "{0 3 5}", "{63}", "[{2}]",
           "'a", "'\\000", '"ab"', '""', '"dup"', "['a \"b\"]"]
 QUOTES = ["[dup]", "[pop]", "[swap]", "[1 +]", "[dup *]", "[pred]", "[succ]", "[0 =]", "[null]",
           "[small]", "[1]", "[]", "[pop true]", "[pop false]", "[+]", "[2 <]", "[first]", "[rest]",
           "[uncons]", "[dup pred]", "[*]", "[not]", "[size]", "[i]", "[[1] i]", "[stack]",
-          "[ord]", "[chr]", "['a =]", "[typeof]", "[integer]", "[list]"]
+          "[ord]", "[chr]", "['a =]", "[typeof]", "[integer]", "[list]", "[set]", "[{1} has]",
+          "[{1 2} and]"]
 WORDS = ("dup swap pop over rollup rolldown rotate dupd swapd popd id cons swons uncons unswons "
          "first rest concat size null small take drop at of + - * / rem succ pred max min abs "
          "sign neg = < > <= >= != not and or xor stack unstack i x dip ord chr has in "

@@ -68,6 +68,8 @@ def _show(x) -> str:
         return _char(x[1])
     if isinstance(x, tuple) and x[0] == "Str":
         return _string(x[1])
+    if isinstance(x, tuple) and x[0] == "Set":
+        return _set(x[1])
     return str(x)
 
 
@@ -86,7 +88,13 @@ def _word(w) -> str:
         return _char(v)
     if kind == "Text":
         return _string(v)
+    if kind == "Set":
+        return _set(v)
     return str(v)                                 # a Def, by its name
+
+
+def _set(members) -> str:
+    return "{" + " ".join(map(str, members)) + "}"
 
 
 def _char(c: int) -> str:

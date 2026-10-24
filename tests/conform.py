@@ -24,6 +24,11 @@ def codes(text: Any) -> Tuple:
     return tuple(map(ord, text)) if isinstance(text, str) else tuple(text)
 
 
+def bits(members) -> int:
+    """A set's members as the reference's 64 bits."""
+    return sum(1 << m for m in members)
+
+
 def element(w: Any) -> Tuple:
     """An interpreted quotation's element as a reference value."""
     if isinstance(w, str):
@@ -37,6 +42,8 @@ def element(w: Any) -> Tuple:
         return ("L", tuple(element(u) for u in v))
     if kind == "Def":
         return ("S", v)
+    if kind == "Set":
+        return ("Z", bits(v))
     if kind == "Glyph":
         return ("C", v)
     if kind == "Text":
@@ -56,6 +63,8 @@ def value(v: Any) -> Tuple:
         return ("C", v[1])
     if isinstance(v, tuple) and v[0] == "Str":
         return ("T", codes(v[1]))
+    if isinstance(v, tuple) and v[0] == "Set":
+        return ("Z", bits(v[1]))
     if isinstance(v, list):
         return ("L", tuple(element(w) for w in v))
     raise ValueError(f"no reference value for {v!r}")
@@ -99,6 +108,8 @@ def tagged(v: Any) -> Tuple:
         return ("C", v[1])
     if v[0] == "Str":
         return ("T", codes(v[1]))
+    if v[0] == "Set":
+        return ("Z", bits(v[1]))
     if v[0] == "quot":
         return ("Q", compiled_outcome(v[1]))
     raise ValueError(f"no reference value for {v!r}")

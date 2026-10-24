@@ -1,13 +1,14 @@
 # SKIlark: Joy on SKIjack
 
-> **Status (2026-10-23).** Phases 1–3 built; predicates in zero
-> knowledge (§3) built; Joy in full under way, stages 1 to 4 and stage
-> 5's characters and strings built (arithmetic and comparison on signed
-> integers, truth values, `branch`, `ifte`, quotations as lists with words
-> as symbols, the stack as data, the recursion combinators, characters and
-> strings; `ifz` retired), every word checked against the reference
-> implementation (§3, stage 4). `word` is at Avon's cap of 31
-> constructors; sets wait on a decision about the cap (§3, stage 5).
+> **Status (2026-10-24).** Phases 1–3 built; predicates in zero
+> knowledge (§3) built; Joy in full under way, stages 1 to 6 built
+> (arithmetic and comparison on signed integers, truth values, `branch`,
+> `ifte`, quotations as lists with words as symbols, the stack as data,
+> the recursion combinators, characters, strings and sets, `typeof` and
+> the type tests; `ifz` retired), every word checked against the
+> reference implementation (§3, stage 4), with one deviation left
+> (`genrec`). `word` has 29 constructors, under Avon's cap of 32
+> arguments: stage 6 merged the literals to make room (§3, stage 6).
 > `skilark/programs/` holds the kernel, the basis kernel phase 3 measured
 > and the phase-1 programs; `skilark/joy.py` is the front end in three
 > forms; `skilark/variants.py` is the basis kernel's loop and fuel in
@@ -155,14 +156,14 @@ programs, host contractions, unfuelled (`uP`) and fuelled (`rP`):
 
 | Joy | result | interpreted | fuelled | compiled | fuelled |
 |---|---|---|---|---|---|
-| `1 2 + dup +` | `6` | 4,952 | 4,941 | 668 | 668 |
-| `3 [dup +] i` | `6` | 4,665 | 4,654 | 684 | 698 |
-| `1 2 over` | `1 2 1` | 5,750 | 5,722 | 700 | 714 |
-| `1 [2] [3] k` | `1 3` | 7,417 | 7,364 | 968 | 996 |
-| `1 2 unit cons` | `[1 2]` | 3,269 | 3,265 | 273 | 273 |
-| `+` (empty stack) | `RErr` | 702 | 716 | 8 | 8 |
-| `3 sumto` | `6` | 114,900 | 108,710 | 24,043 | 23,605 |
-| `5 sumto` | `15` | 184,099 | 169,770 | 39,822 | 38,824 |
+| `1 2 + dup +` | `6` | 5,260 | 5,249 | 668 | 668 |
+| `3 [dup +] i` | `6` | 4,912 | 4,901 | 684 | 698 |
+| `1 2 over` | `1 2 1` | 5,975 | 5,947 | 700 | 714 |
+| `1 [2] [3] k` | `1 3` | 7,723 | 7,670 | 968 | 996 |
+| `1 2 unit cons` | `[1 2]` | 3,406 | 3,402 | 273 | 273 |
+| `+` (empty stack) | `RErr` | 730 | 744 | 8 | 8 |
+| `3 sumto` | `6` | 120,176 | 113,986 | 24,043 | 23,605 |
+| `5 sumto` | `15` | 192,269 | 177,940 | 39,822 | 38,824 |
 
 The counts are the kernel with Joy's stages 1 to 6 (§3), and
 `sumto` is written with `ifte` and `pred`, since `ifz` has left the
@@ -236,12 +237,12 @@ contractions on the reference reducer:
 
 | form | program | fuel | top is 6? | top is 7? |
 |---|---|---|---|---|
-| interpreted | `1 2 + dup +` | 7,000 | yes, 35,243,483 | no, 35,291,186 |
-| interpreted | `1 2 + sq` | 7,000 | yes, 36,399,854 | no, 36,448,565 |
+| interpreted | `1 2 + dup +` | 7,000 | yes, 38,575,065 | no, 38,624,987 |
+| interpreted | `1 2 + sq` | 7,000 | yes, 39,777,702 | no, 39,828,632 |
 | compiled | `1 2 + dup +` | 1,500 | yes, 2,328,665 | no, 2,342,964 |
 | compiled | `1 2 + sq` | 1,500 | yes, 2,337,648 | no, 2,351,954 |
 
-Beside the level-0 counts of `1 2 + dup +` alone (4,952 interpreted,
+Beside the level-0 counts of `1 2 + dup +` alone (5,260 interpreted,
 493 compiled) the cost of virtualization is five to eight thousandfold:
 each emulated step walks and rebuilds a spine of thousands of atoms, and
 the interpreted form pays for its bigger term twice over. The
@@ -772,7 +773,8 @@ other quotations a combinator never runs would be checked. The ways on:
 *Stage 6: the sidestep (2026-10-24).* Sets and type tests fit under the
 cap with no change to Avon, in three steps: the literals merge (option
 3), the kernel gains Joy's `typeof`, from which the type tests derive,
-and sets arrive as an item and the cases the kernel's words take for it.
+and sets arrive as an item, the cases the kernel's words take for it,
+and Joy's `not`, the complement, as the kernel's 29th word.
 
 - *One literal constructor.* `Lit int`, `Quote prog`, `Truth logical`,
   `Glyph int` and `Text text` are `Lit item`: `word` has 27
@@ -829,6 +831,49 @@ and sets arrive as an item and the cases the kernel's words take for it.
   takes `ap`. No pinned program spills; the deepest nests 174 levels. The model
   keeps integers to 64 bits, as the reference's are, and calls a result
   past them undefined, so the fuzz never squares a number without end.
+- *Sets.* An item is also `Set set`, its members the integers 0 to 63,
+  distinct and ascending; a literal `{3 1}` is read as the reference's
+  `list2set` reads it, integers and characters 0 to 63. The kernel's
+  words take sets as the reference's do: `cons` puts in a member (an
+  integer or a character, 0 to 63, or an error), `uncons first rest`
+  take the least, `cat concat` the union, and `null small typeof` and
+  the truth value read them. `=` compares a set with a number by the
+  number's 64 bits, two's complement, as compare.h does, and `<`, when
+  either value is a set, is comprel.h's proper subset of the bits; `>`
+  and `>=` derive that order by `swap`. `has in map filter step fold
+  primrec size at of take drop` take sets as derived; `map` makes a set
+  of its results.
+- *`not` is the kernel's.* The complement walks 0 to 63, and a derived
+  loop costs about 300,000 interpreted contractions an element: with a
+  derived complement, `{1 2} not size` passed the reader's 5,000,000.
+  Joy's `not` is the kernel's 29th constructor instead: logical
+  negation of a number, a character or a truth value, a set's
+  complement, an error otherwise. With it and the union the set
+  operations derive by De Morgan: `X Y and` is `not (not X or not Y)`,
+  and `xor` is `(X - Y) or (Y - X)`, each difference `not (not X or Y)`.
+  The set functions merge the ascending members: `{1 2} {2 3} and
+  first` takes 39,239 interpreted contractions, where a draft that built
+  the union by repeated insertion took 1,593,877. `word` has 29
+  constructors, its one-field ones take 30 arguments, under Avon's 32.
+- *The compiled form has sets only where a program does.* A set literal
+  alone makes a set, so a program set without one takes the set words
+  without their set branches (`joy.PLAIN`), and its kernel keeps its
+  shape; with one, the kernel gains `Set` and the lines that take it. zk's
+  sources stay byte for byte.
+- *What sets cost.* `step` is 45,016 atoms, from 34,204; the bits a
+  comparison takes are a top-level function, so no word passes them.
+  No pinned outcome changes. Over the 207 programs of steps 1 and 2 the
+  interpreted counts rise 3.7% and the compiled fall 2.5%: `true not`
+  takes 1,713 interpreted and 116 compiled contractions, from 17,626
+  and 7,524, and `times` counts down by the kernel's `<`, so `2 [10]
+  times` takes 99,463 and 17,751, from 173,598 and 33,298; `>` and `>=`
+  ask whether either value is a set, so `3 3 >=` takes 24,720
+  interpreted, from 6,471. Against stage 5, the 161 programs it pinned
+  take 7.8% more interpreted contractions in all (median 0.97 of
+  stage 5's) and 15.5% more compiled. The level-1 runs take 38,575,065
+  and 39,777,702. Seventy-three programs and seven laws pin sets in
+  both forms (`tests/test_sets.py`); the dearest, `{1 2} [succ] map`,
+  takes 475,542 interpreted contractions.
 
 ## 4. Risks
 
