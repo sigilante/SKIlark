@@ -26,14 +26,17 @@ QUOTES = ["[dup]", "[pop]", "[swap]", "[1 +]", "[dup *]", "[pred]", "[succ]", "[
 WORDS = ("dup swap pop over rollup rolldown rotate dupd swapd popd id cons swons uncons unswons "
          "first rest concat size null small take drop at of + - * / rem succ pred max min abs "
          "sign neg = < > <= >= != not and or xor stack unstack i x dip ord chr has in "
-         "typeof integer char logical set string list leaf user float file sametype").split()
+         "typeof integer char logical set string list leaf user float file sametype "
+         "rollupd rolldownd rotated choice setsize enconcat equal").split()
 #: combinators by how many quotations they take
-COMBINATORS = {1: "nullary infra times map filter step".split(), 2: "while branch".split(),
-               3: "ifte tailrec primrec fold".split(), 4: "linrec binrec genrec".split()}
+COMBINATORS = {1: "nullary infra times map filter step app1 app11 app12 unary binary ternary "
+                  "unary2 unary3 split some all treestep".split(),
+               2: "while branch cleave ifinteger iflist ifchar treerec".split(),
+               3: "ifte tailrec primrec fold treegenrec".split(), 4: "linrec binrec genrec".split()}
 
 #: the words whose deviations ``test_conformance.DEVIATIONS`` names: a
 #: difference from the reference in a program without one is a bug
-DEVIANT = {"genrec"}
+DEVIANT = {"genrec", "treerec", "treegenrec"}
 
 
 def program(rng: random.Random) -> str:

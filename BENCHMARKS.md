@@ -143,9 +143,22 @@ half from one run to the next.
 | #12, step 2 | 3h03m | 2h18m | 1h09m | 1h43m | 1h40m |
 | #13, step 3 | 2h24m | 1h41m | 1h24m | 2h13m | 1h09m |
 
-Two modules carry most of the growth: `test_types.py` and
-`test_sets.py`, each about eleven minutes locally, compile each of their
-programs alone.
+| #15, a linear abstraction, xdist, Avon | 58m (reference) | 16m | 11m | 12m | 9m |
+| #16, the reference in four shards | 9–15m (and slow, 3m) | 14m | 11m | 12m | 10m |
+
+Two changes cut CI from hours to a quarter of an hour:
+
+- *A linear bracket abstraction* (#15). aviary_kernel's
+  `bracket_abstract` asks `free_vars` of a body at every level it
+  descends, and `free_vars` walks the body whole; a compiled set program
+  spent 640 of its 644 s of compile there. `skilark.abstraction` answers
+  each node once, for one compile, with aviary's terms hash for hash: that
+  program compiles in 4.7 s, from 78.5, and the suite takes 9.5 minutes
+  on aviary on four workers, from 70 serially.
+- *Avon and sharding* (#15, #16). The Python jobs reduce on Avon (the
+  suite in 2.5 minutes locally); the reference job checks every
+  reduction against aviary in four shards (`SKILARK_SHARD`), and the slow
+  tests run alone.
 
 ## Room left
 

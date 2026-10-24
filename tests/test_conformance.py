@@ -16,6 +16,7 @@ import test_modes as M
 import test_text as T
 import test_types as Y
 import test_sets as Z
+import test_library as B
 import test_words as W
 from skilark import compiled, interpreted
 
@@ -25,12 +26,14 @@ PINNED = ([("words", n, p) for n, p in W.PROGRAMS.items()]
           + [("text", n, p) for n, p in T.PROGRAMS.items()]
           + [("types", n, p) for n, p in Y.PROGRAMS.items()]
           + [("sets", n, p) for n, p in Z.PROGRAMS.items()]
+          + [("library", n, p) for n, p in B.PROGRAMS.items()]
           + [("modes", n, p) for n, p in M.PROGRAMS.items()])
 TABLES = {"words": (W.INTERPRETED, W.COMPILED),
           "combinators": (C.INTERPRETED, C.COMPILED),
           "text": (T.INTERPRETED, T.COMPILED),
           "types": (Y.INTERPRETED, Y.COMPILED),
           "sets": (Z.INTERPRETED, Z.COMPILED),
+          "library": (B.INTERPRETED, B.COMPILED),
           "modes": (M.INTERPRETED, M.COMPILED)}
 
 
@@ -46,12 +49,20 @@ def test_the_pinned_outcome_is_the_references(module, name, text):
 #: outcome, SKIlark's in both forms as the interpreted form reads it, why).
 #: Since stage 6 a derived word checks its arguments' types as the
 #: reference does (``typeof``), and a combinator its quotations before it
-#: runs one, so one deviation is left.
+#: runs one, so one deviation is left, and the tree combinators of stage 7
+#: share it.
 DEVIATIONS = {
     "2 [0 =] [5] [pred] [first size] genrec": (
         ("RVal", [("N", 1), ("N", 5)]), ("RVal", [1, 11]),
         "genrec hands R2 [[[B] [T] [R1] R2] #genrecaux], the reference's own word; "
         "the derived genrec hands it a quotation that recurses through y"),
+    "[1 2] [] [] treerec size popd": (
+        ("RVal", [("N", 2)]), ("RVal", [3]),
+        "treerec hands C [[[O] C] #treerecaux], the reference's own word; the derived "
+        "treerec hands it a quotation that recurses through y"),
+    "[1 2] [] [] [] treegenrec size popd": (
+        ("RVal", [("N", 2)]), ("RVal", [3]),
+        "treegenrec hands C [[[O1] [O2] C] #treegenrecaux], as treerec does"),
 }
 
 

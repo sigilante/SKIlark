@@ -1,7 +1,7 @@
 # SKIlark: Joy on SKIjack
 
 > **Status (2026-10-24).** Phases 1–3 built; predicates in zero
-> knowledge (§3) built; Joy in full under way, stages 1 to 6 built
+> knowledge (§3) built; Joy in full under way, stages 1 to 7 built
 > (arithmetic and comparison on signed integers, truth values, `branch`,
 > `ifte`, quotations as lists with words as symbols, the stack as data,
 > the recursion combinators, characters, strings and sets, `typeof` and
@@ -874,6 +874,45 @@ and Joy's `not`, the complement, as the kernel's 29th word.
   and 39,777,702. Seventy-three programs and seven laws pin sets in
   both forms (`tests/test_sets.py`); the dearest, `{1 2 3} [2 <]
   filter`, takes 475,542 interpreted contractions.
+
+*Stage 7: the library words (2026-10-24; `tests/test_library.py`).*
+The reference's builtins that need no kernel word are derived, each
+checking its arguments as the C source does and checked against the model
+built from it:
+
+- *Stack words and small ones:* `rollupd rolldownd rotated` (their words
+  under `dip`), `choice`, `setsize` (64) and `enconcat`.
+- *The n-ary combinators:* `app1 app11 app12 unary binary ternary unary2
+  unary3 unary4 app2 app3 app4 cleave construct`. Each result is
+  `nullary` of a program that drops the other arguments, so P sees the
+  stack the reference gives it: the one below all its arguments.
+- *The type conditionals:* `ifinteger ifchar iflogical ifset ifstring
+  iflist iffloat iffile`.
+- *Clauses:* `cond case opcase`, a loop over the clauses through `y`;
+  `cond` checks every test is a quotation first, as cond.c does.
+- *Aggregates:* `split`, `some` and `all`, which stop at the first member
+  that decides, as someall.h does, and `equal`, lists member by member.
+- *Trees:* `treestep treerec treegenrec`. As `genrec` does, `treerec` and
+  `treegenrec` hand C a quotation that recurses through `y` where the
+  reference hands it its own `#treerecaux`, so a C that looks at it sees
+  three members, not two: two deviations, pinned, of `genrec`'s kind.
+- *Fuel is 10,000 words.* `construct`, `equal` and `split` spend
+  hundreds of words an element, past 1,000; the larger numeral adds 7
+  contractions to every fuelled interpreted run, and no unfuelled count
+  changes.
+
+- *`has` keeps a symbol a value.* It put the value it looks for into a
+  quotation, `[=] cons`, where a symbol runs: `[size] first [{2}] in`
+  erred where the reference gives false. It goes in as `[X] first` now.
+  The fuzz found it.
+
+Eighty-three programs and seven laws pin them in both forms; the dearest,
+`[1 [2 3]] [1 [2 3]] equal`, takes 2,614,403 interpreted contractions.
+`compare` waits: it orders sets as the reference does, by their 64 bits
+as an integer, which the kernel's sets do not hold. `name body intern
+maxint` need the kernel: a symbol's name as a string, a definition's
+body, a string as a symbol, and an integer of 63 bits, beyond a unary
+numeral.
 
 ## 4. Risks
 
