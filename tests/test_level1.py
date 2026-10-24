@@ -16,11 +16,11 @@ from skilark.joy import DEFINITIONS
 DEFS = dict(DEFINITIONS, sq="dup +")
 
 #: host contractions, measured once (PLAN.md section 1c)
-LEVEL1_IQ, LEVEL1_IP = (35_243_483, 35_291_186), (36_399_854, 36_448_565)
+LEVEL1_IQ, LEVEL1_IP = (38_575_065, 38_624_987), (39_777_702, 39_828_632)
 LEVEL1_CQ, LEVEL1_CP = (2_328_665, 2_342_964), (2_337_648, 2_351_954)
-READER_YES, READER_NO, READER_TQ, READER_TE, READER_TERR = 309_539, 317_335, 127_441, 33_204, 14_794
-READER_TL, READER_NEG, READER_SYM = 124_724, 148_862, 122_348
-READER_TC, READER_TS = 120_309, 118_603
+READER_YES, READER_NO, READER_TQ, READER_TE, READER_TERR = 328_277, 336_136, 144_349, 33_204, 14_794
+READER_TL, READER_NEG, READER_SYM = 141_273, 166_307, 138_542
+READER_TC, READER_TS, READER_TZ = 136_152, 134_099, 132_379
 
 #: (form, program, fuel) -> (outcome, host contractions)
 MEASURED = {
@@ -73,6 +73,7 @@ terr := wfN dict |- <topIs (Suc (Suc Zero)) RErr>@400
 tl   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Logical True) Empty))>@400
 tc   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Char (Pos (Suc (Suc Zero)))) Empty))>@400
 ts   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Str TNil) Empty))>@400
+tz   := wfN dict |- <topIs (Suc (Suc Zero)) (RVal (Push (Set SNil) Empty))>@400
 """
 
 
@@ -91,6 +92,7 @@ def test_the_level_1_answer_is_a_combinator_applied_to_atoms():
     assert r.run("sym", 20_000_000) == (("OSym", None), READER_SYM)
     assert r.run("tc", 20_000_000) == (("OChar", None), READER_TC)
     assert r.run("ts", 20_000_000) == (("OStr", None), READER_TS)
+    assert r.run("tz", 20_000_000) == (("OSet", None), READER_TZ)
 
 
 # ---------------------------------------------------- the runs, measured

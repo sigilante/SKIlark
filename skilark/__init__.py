@@ -28,7 +28,7 @@ from . import joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 #: the directory holding the ``.ski`` sources
 DIR = pathlib.Path(__file__).parent / "programs"
@@ -82,12 +82,12 @@ class Run:
 
     #: a literal's reading by its item's kind: an integer is ``("Lit", n)``
     _LITERALS = {"Num": "Lit", "Logical": "Truth", "Quot": "Quote", "Char": "Glyph",
-                 "Str": "Text"}
+                 "Str": "Text", "Set": "Set"}
 
     def literal(self, term) -> Tuple[str, Any]:
         """The kernel's ``Lit`` word, by its item: ``("Lit", n)``,
-        ``("Truth", b)``, ``("Quote", words)``, ``("Glyph", n)`` or
-        ``("Text", s)``."""
+        ``("Truth", b)``, ``("Quote", words)``, ``("Glyph", n)``,
+        ``("Text", s)`` or ``("Set", members)``."""
         kind, payload = peel(term, self.t["item"], max_steps=STEPS)
         if kind == "Num" or kind == "Char":
             v: Any = self.number(payload[0])
@@ -97,6 +97,8 @@ class Run:
             v = self.string(payload[0])
         elif kind == "Quot":
             v = self.prog(payload[0])
+        elif kind == "Set":
+            v = self.members(payload[0])
         else:
             raise ValueError(f"no literal of kind {kind}")
         return (self._LITERALS[kind], v)
@@ -126,6 +128,15 @@ class Run:
         if all(0 <= c < 0x110000 for c in codes):
             return "".join(map(chr, codes))
         return tuple(codes)
+
+    def members(self, term) -> Tuple[int, ...]:
+        """A set's members, ascending."""
+        out = []
+        ctor, fields = peel(term, self.t["set"], max_steps=STEPS)
+        while ctor == "SCons":
+            out.append(self.pr.read_nat(fields[0]))
+            ctor, fields = peel(fields[1], self.t["set"], max_steps=STEPS)
+        return tuple(out)
 
     def text(self, term) -> str:
         """A name's ``text`` as a string: a letter is its place in the
@@ -169,6 +180,8 @@ class Run:
                 items.append(("Char", self.number(payload[0])))
             elif kind == "Str":
                 items.append(("Str", self.string(payload[0])))
+            elif kind == "Set":
+                items.append(("Set", self.members(payload[0])))
             elif self.mode == "compiled":
                 items.append(self.quot(payload[0]))
             else:
@@ -200,6 +213,7 @@ class Run:
 #: the level-1 reader's spellings of the outcomes (joy.LEVEL1_READER)
 _ATOM_OUTCOMES = {"K": "Yes", "K I": "No", "S S": "OEmpty", "S K K": "OQuot",
                   "S S K": "OLogical", "S S I": "OSym", "S K S": "OChar", "S S S": "OStr",
+                  "S I K": "OSet",
                   "S K": "RErr", "S I": "RTime"}
 
 

@@ -15,6 +15,7 @@ import test_combinators as C
 import test_modes as M
 import test_text as T
 import test_types as Y
+import test_sets as Z
 import test_words as W
 from skilark import compiled, interpreted
 
@@ -23,11 +24,13 @@ PINNED = ([("words", n, p) for n, p in W.PROGRAMS.items()]
           + [("combinators", n, p) for n, p in C.PROGRAMS.items()]
           + [("text", n, p) for n, p in T.PROGRAMS.items()]
           + [("types", n, p) for n, p in Y.PROGRAMS.items()]
+          + [("sets", n, p) for n, p in Z.PROGRAMS.items()]
           + [("modes", n, p) for n, p in M.PROGRAMS.items()])
 TABLES = {"words": (W.INTERPRETED, W.COMPILED),
           "combinators": (C.INTERPRETED, C.COMPILED),
           "text": (T.INTERPRETED, T.COMPILED),
           "types": (Y.INTERPRETED, Y.COMPILED),
+          "sets": (Z.INTERPRETED, Z.COMPILED),
           "modes": (M.INTERPRETED, M.COMPILED)}
 
 

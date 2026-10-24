@@ -4,8 +4,8 @@ The reference is Wodan58/Joy (github.com/Wodan58/Joy, fe9fa0f, 2026-03-31),
 the maintained descendant of von Thun's joy1.  Each builtin below follows
 its C source (``src/<name>.c`` and the macros of ``runtime.h``), cited by
 file; the comments say where the reference's checks fall.  It covers the
-types SKIlark has: integers, truth values, characters, strings, lists and
-symbols.  Floats, files, sets and the other words are not modelled, and
+types SKIlark has: integers, truth values, characters, strings, sets,
+lists and symbols.  Floats, files and the other words are not modelled, and
 neither are two artefacts of the reference's C strings: a string ends at
 a character 0, and its characters above 127 read back negative where C's
 ``char`` is signed.
@@ -16,6 +16,7 @@ Values are tagged tuples:
     ("B", b)        a truth value
     ("C", n)        a character, its code
     ("T", (n, ..))  a string, its characters' codes
+    ("Z", bits)     a set of 0 to 63, its 64 bits as a natural
     ("L", (x, ..))  a list: a quotation is a list of its elements
     ("S", name)     a symbol: a word inside a quotation
 
@@ -58,19 +59,39 @@ def _special(text: str, i: int) -> Tuple[int, int]:
     return ord(c), i + 1
 
 
+#: globals.h SETSIZE, and a set's bits
+SETSIZE = 64
+MASK = (1 << SETSIZE) - 1
+
+
+def list2set(members: list) -> Value:
+    """factor.c ``list2set``: a set literal's integers and characters,
+    each 0 to 63; anything else is the reader's error."""
+    bits = 0
+    for t in members:
+        code = t if isinstance(t, int) else t[1] if isinstance(t, tuple) and t[0] == "C" else None
+        if code is None or not 0 <= code < SETSIZE:
+            raise ValueError(f"not a set member: {t!r}")
+        bits |= 1 << code
+    return ("Z", bits)
+
+
 def parse(text: str) -> list:
     """Joy text as tokens, as scan.c reads it: integers, names, nested
-    lists, ``("C", n)`` for ``'c`` and ``("T", codes)`` for ``"..."``."""
+    lists, ``("C", n)`` for ``'c``, ``("T", codes)`` for ``"..."`` and
+    ``("Z", bits)`` for ``{...}``."""
     out: list = [[]]
     i = 0
     while i < len(text):
         c = text[i]
         if c.isspace():
             i += 1
-        elif c == "[":
+        elif c in "[{":
             out.append([]); i += 1
         elif c == "]":
             q = out.pop(); out[-1].append(q); i += 1
+        elif c == "}":
+            q = out.pop(); out[-1].append(list2set(q)); i += 1
         elif c == "'":
             if text[i + 1] == "\\":
                 code, i = _special(text, i + 2)
@@ -89,7 +110,7 @@ def parse(text: str) -> list:
             out[-1].append(("T", tuple(codes))); i += 1
         else:
             j = i
-            while j < len(text) and not text[j].isspace() and text[j] not in "[]":
+            while j < len(text) and not text[j].isspace() and text[j] not in "[]{}":
                 j += 1
             t = text[i:j]; i = j
             out[-1].append(int(t) if t.lstrip("-").isdigit() and t != "-" else t)
@@ -128,9 +149,25 @@ def is_null(v: Value) -> bool:
     """compare.h ``is_null``."""
     if numeric(v):
         return num(v) == 0
-    if v[0] in ("L", "T"):
+    if v[0] in ("L", "T", "Z"):
         return not v[1]
     return False                                    # USR_, ANON_FUNCT_
+
+
+def signed(bits: int) -> int:
+    """A set's bits as ``nodevalue(...).num`` reads them, an int64_t."""
+    return bits - (1 << SETSIZE) if bits >> (SETSIZE - 1) else bits
+
+
+def unsigned(v: Value) -> int:
+    """comprel.h's ``nodevalue(...).num`` as a uint64_t, for SETCMP: a
+    set's bits, a number's two's complement.  A list's, a string's or a
+    symbol's is a C pointer, which the model does not follow."""
+    if v[0] == "Z":
+        return v[1]
+    if numeric(v) and -(1 << 63) <= num(v) < (1 << 63):
+        return num(v) & MASK
+    raise Undefined("a set compared by < with a value that is not a number")
 
 
 def name(v: Value):
@@ -148,9 +185,11 @@ def compare(a: Value, b: Value) -> int:
             x, y = name(a), name(b)
             return (x > y) - (x < y)
         return 1
-    if numeric(a):
-        if numeric(b):
-            return (num(a) > num(b)) - (num(a) < num(b))
+    if numeric(a) or a[0] == "Z":                   # a set's bits as an int64_t
+        if numeric(b) or b[0] == "Z":
+            x = signed(a[1]) if a[0] == "Z" else num(a)
+            y = signed(b[1]) if b[0] == "Z" else num(b)
+            return (x > y) - (x < y)
         return 1
     return 1                                        # LIST_
 
@@ -159,7 +198,7 @@ def truth(v: Value) -> bool:
     """boolean.h ``get_boolean``."""
     if numeric(v):
         return num(v) != 0
-    if v[0] in ("L", "T"):
+    if v[0] in ("L", "T", "Z"):
         return bool(v[1])
     return True                                     # USR_, ANON_FUNCT_
 
@@ -291,16 +330,19 @@ class Joy:
         lst = s.pop()[1]
         s[:] = list(reversed(lst))
 
-    # -- aggregates: lists and strings
+    # -- aggregates: lists, strings and sets
 
     @staticmethod
     def aggregate(v: Value) -> None:
-        if v[0] not in ("L", "T"):
+        if v[0] not in ("L", "T", "Z"):
             raise JoyError("aggregate")
 
     @staticmethod
     def members(v: Value) -> list:
-        """An aggregate's members: a string's are characters."""
+        """An aggregate's members: a string's are characters, a set's its
+        integers, ascending."""
+        if v[0] == "Z":
+            return [("N", i) for i in range(SETSIZE) if v[1] >> i & 1]
         return [("C", c) for c in v[1]] if v[0] == "T" else list(v[1])
 
     @staticmethod
@@ -308,13 +350,28 @@ class Joy:
         """An aggregate of ``kind`` from its members."""
         if kind == "T":
             return ("T", tuple(m[1] for m in members))
+        if kind == "Z":
+            bits = 0
+            for m in members:
+                bits |= 1 << num(m)
+            return ("Z", bits)
         return ("L", tuple(members))
 
+    @staticmethod
+    def member(x: Value) -> int:
+        """runtime.h CHECKSETMEMBER: an integer or a character, 0 to 63."""
+        if x[0] not in ("N", "C") or not 0 <= x[1] < SETSIZE:
+            raise JoyError("small numeric")
+        return x[1]
+
     def consed(self, a: Value, x: Value) -> Value:
-        """cons_swons.h: a list takes any member, a string a character."""
+        """cons_swons.h: a list takes any member, a string a character, a
+        set a small number."""
         self.aggregate(a)
         if a[0] == "T" and x[0] != "C":
             raise JoyError("character")
+        if a[0] == "Z":
+            return ("Z", a[1] | 1 << self.member(x))
         return self.build(a[0], [x] + self.members(a))
 
     def w_cons(self, s):                # cons.c: X A -> B
@@ -352,12 +409,13 @@ class Joy:
         if s[-1][0] != s[-2][0]:
             raise JoyError("same types")
         self.aggregate(s[-1])
-        b = s.pop(); a = s.pop(); s.append((a[0], a[1] + b[1]))
+        b = s.pop(); a = s.pop()
+        s.append(("Z", a[1] | b[1]) if a[0] == "Z" else (a[0], a[1] + b[1]))
 
     def w_size(self, s):                # size.c
         self.params(s, 1)
         self.aggregate(s[-1])
-        s.append(("N", len(s.pop()[1])))
+        s.append(("N", len(self.members(s.pop()))))
 
     def w_null(self, s):                # null.c: symbols are not null
         self.params(s, 1); s.append(("B", is_null(s.pop())))
@@ -367,8 +425,8 @@ class Joy:
         v = s.pop()
         if numeric(v):
             s.append(("B", num(v) < 2))
-        elif v[0] in ("L", "T"):
-            s.append(("B", len(v[1]) < 2))
+        elif v[0] in ("L", "T", "Z"):
+            s.append(("B", len(self.members(v)) < 2))
         else:
             raise JoyError("different type")
 
@@ -383,13 +441,13 @@ class Joy:
         self.params(s, 2)
         n = self.index(s.pop())
         self.aggregate(s[-1])
-        a = s.pop(); s.append((a[0], a[1][:n]))
+        a = s.pop(); s.append(self.build(a[0], self.members(a)[:n]))
 
     def w_drop(self, s):                # drop.c: A N -> B
         self.params(s, 2)
         n = self.index(s.pop())
         self.aggregate(s[-1])
-        a = s.pop(); s.append((a[0], a[1][n:]))
+        a = s.pop(); s.append(self.build(a[0], self.members(a)[n:]))
 
     def w_at(self, s):                  # at.c, of_at.h: A I -> X
         self.params(s, 2)
@@ -498,8 +556,11 @@ class Joy:
         s.append(("C", num(s.pop())))
 
     def has(self, a: Value, x: Value) -> bool:
-        """inhas.h: a list by the comparison, a string by character code."""
+        """inhas.h: a list by the comparison, a string by character code, a
+        set by a small number's bit."""
         self.aggregate(a)
+        if a[0] == "Z":
+            return bool(a[1] >> self.member(x) & 1)
         if a[0] == "T":
             return numeric(x) and num(x) in a[1]
         return any(compare(m, x) == 0 for m in a[1])
@@ -512,10 +573,15 @@ class Joy:
         self.params(s, 2)
         a = s.pop(); x = s.pop(); s.append(("B", self.has(a, x)))
 
-    # -- comparison (comprel.h, comprel2.h; no sets here)
+    # -- comparison (comprel.h, comprel2.h): = and != compare, the orders
+    #    take a set's bits (SETCMP) when either value is a set
 
-    def comprel(self, s, test):
+    def comprel(self, s, test, setcmp=None):
         self.params(s, 2)
+        if setcmp and "Z" in (s[-1][0], s[-2][0]):
+            j = unsigned(s[-1]); i = unsigned(s[-2])
+            s.pop(); s.pop(); s.append(("B", setcmp(i, j)))
+            return
         y = s.pop(); x = s.pop(); s.append(("B", test(compare(x, y))))
 
     def w_eql(self, s):
@@ -525,41 +591,47 @@ class Joy:
         self.comprel(s, lambda c: c != 0)
 
     def w_less(self, s):
-        self.comprel(s, lambda c: c < 0)
+        self.comprel(s, lambda c: c < 0, lambda i, j: i != j and not i & ~j)
 
     def w_leql(self, s):
-        self.comprel(s, lambda c: c <= 0)
+        self.comprel(s, lambda c: c <= 0, lambda i, j: not i & ~j)
 
     def w_greater(self, s):
-        self.comprel(s, lambda c: c > 0)
+        self.comprel(s, lambda c: c > 0, lambda i, j: i != j and not j & ~i)
 
     def w_geql(self, s):
-        self.comprel(s, lambda c: c >= 0)
+        self.comprel(s, lambda c: c >= 0, lambda i, j: not j & ~i)
 
     # -- truth values (not.c, andorxor.h)
 
-    def w_not(self, s):
+    def w_not(self, s):                 # not.c: a set's complement
         self.params(s, 1)
+        if s[-1][0] == "Z":
+            s.append(("Z", ~s.pop()[1] & MASK))
+            return
         if not numeric(s[-1]):
             raise JoyError("different type")
         s.append(("B", num(s.pop()) == 0))
 
-    def andorxor(self, s, op):
+    def andorxor(self, s, op, setop):
         self.params(s, 2)
         if s[-1][0] != s[-2][0]:
             raise JoyError("same types")
+        if s[-1][0] == "Z":
+            y = s.pop()[1]; x = s.pop()[1]; s.append(("Z", setop(x, y)))
+            return
         if not numeric(s[-1]):
             raise JoyError("different type")
         y = num(s.pop()); x = num(s.pop()); s.append(("B", op(x, y)))
 
     def w_and(self, s):
-        self.andorxor(s, lambda x, y: bool(x and y))
+        self.andorxor(s, lambda x, y: bool(x and y), lambda x, y: x & y)
 
     def w_or(self, s):
-        self.andorxor(s, lambda x, y: bool(x or y))
+        self.andorxor(s, lambda x, y: bool(x or y), lambda x, y: x | y)
 
     def w_xor(self, s):
-        self.andorxor(s, lambda x, y: x != y)
+        self.andorxor(s, lambda x, y: x != y, lambda x, y: x ^ y)
 
     # -- combinators
 
@@ -674,7 +746,7 @@ class Joy:
     def w_primrec(self, s):             # primrec.c: X [I] [C]
         self.params(s, 3); self.quotes(s, 2)
         c = s.pop(); i = s.pop(); x = s.pop()
-        if x[0] in ("L", "T"):
+        if x[0] in ("L", "T", "Z"):
             members = self.members(x)
         elif x[0] == "N":
             members = [("N", k) for k in range(x[1], 0, -1)]
@@ -698,6 +770,9 @@ class Joy:
             if not all(numeric(v) for v in out):
                 raise Undefined("map on a string to a non-number")
             out = [("C", (num(v) + 128) % 256 - 128) for v in out]
+        if a[0] == "Z":                             # set |= 1 << num, unchecked
+            if not all(numeric(v) and 0 <= num(v) < SETSIZE for v in out):
+                raise Undefined("map on a set to a value that is not a member")
         s.append(self.build(a[0], out))
 
     def w_filter(self, s):              # filter.c: A [B] -> A1
