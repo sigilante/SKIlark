@@ -192,13 +192,34 @@ programs take 3.5% more interpreted contractions and 0.5% more compiled;
 native subtractions, the two rows marked: `step` is 57,570 atoms, and the
 three pinned programs that divide take 0.2% to 0.4% fewer contractions.
 
+## `size` and `at` in `ext`
+
+Stage 8 (PLAN.md §3) makes `size` and `at` kernel words, constructors
+of `ext` under `word`'s `Ext`. Interpreted, on Avon:
+
+| program | derived | `ext` |
+|---|---:|---:|
+| `[1 2 3] size` | 82,459 | 1,895 |
+| `[4 5 6] 1 at` | 115,061 | 3,364 |
+| `"abc" 2 at` | 163,493 | 3,610 |
+| `[[1 2] [3]] [size] map` | 508,279 | 374,049 |
+| `[size] first` | 2,547 | 2,633 |
+
+No pinned outcome changes. The 363 pinned interpreted programs take
+10.6% fewer contractions at the geometric mean, 46,528,801 from
+48,183,315; the most, 58 times fewer, and the least, 3.8% more, where a
+program uses neither word and pays for a wider `word`. `step` is 61,675
+atoms, from 57,570; the interpreted level-1 runs cost 4.6% more. The
+compiled form, which derives both, is unchanged.
+
 ## Room left
 
-- *`word`:* 29 constructors of the 31 the cap allows (its one-field
-  constructors take 30 arguments of 32), so two kernel words fit. A third
-  needs Avon's `AV_JET_ARITY_MAX` and its template markers raised
-  together (to 64 at most, the width of its marker sets) or `word` split
-  in two.
+- *`word`:* 30 constructors of the 31 the cap allows (its one-field
+  constructors take 31 arguments of 32). The thirtieth, `Ext ext`, holds
+  the kernel's further words in a sum of their own, 2 of its 31, so a
+  new kernel word goes in `ext` at one dispatch more. Past that, Avon's
+  `AV_JET_ARITY_MAX` and its template markers rise together (to 64 at
+  most, the width of its marker sets).
 - *`item`:* 7 constructors. Each case on an item gains a branch per
   kind, and `step` grew by a third with sets, so a new kind costs every
   interpreted word a few percent.

@@ -23,14 +23,14 @@ PROGRAMS = {
 
 #: outcome, then host contractions unfuelled (uP) and fuelled (rP)
 INTERPRETED = {
-    "p1": (('RVal', [6]), 5_260, 5_256),
-    "p2": (('RVal', [6]), 4_912, 4_908),
-    "p3": (('RVal', [1, 2, 1]), 5_975, 5_954),
-    "p4": (('RVal', [1, 3]), 7_723, 7_677),
-    "p5": (('RVal', [[('Lit', 1), ('Lit', 2)]]), 3_406, 3_409),
-    "p6": (('RErr', None), 730, 751),
-    "p7": (('RVal', [6]), 125_182, 118_999),
-    "p8": (('RVal', [15]), 205_529, 191_207),
+    "p1": (('RVal', [6]), 5_404, 5_400),
+    "p2": (('RVal', [6]), 5_056, 5_052),
+    "p3": (('RVal', [1, 2, 1]), 6_179, 6_158),
+    "p4": (('RVal', [1, 3]), 7_987, 7_941),
+    "p5": (('RVal', [[('Lit', 1), ('Lit', 2)]]), 3_522, 3_525),
+    "p6": (('RErr', None), 758, 779),
+    "p7": (('RVal', [6]), 128_332, 122_149),
+    "p8": (('RVal', [15]), 210_355, 196_033),
 }
 COMPILED = {
     "p1": (('RVal', [6]), 668, 668),
@@ -79,7 +79,7 @@ def test_a_kept_name_survives_as_itself():
 
 def test_interpreted_kernel_sizes(interp):
     s = interp.e.sizes
-    assert (s["exec"], s["execU"], s["step"]) == (57_630, 57_634, 57_570)
+    assert (s["exec"], s["execU"], s["step"]) == (61_735, 61_739, 61_675)
 
 
 @pytest.mark.parametrize("name", sorted(PROGRAMS))

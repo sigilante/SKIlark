@@ -29,7 +29,11 @@ set     === SNil | SCons nat set
 item    === Num int | Quot prog | Logical logical | Sym word | Char int | Str text | Set set
 stack   === Empty | Push item stack
 named   === Named text prog | User text prog
-word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | Sub | Mul | Div | Rem | Eql | Lt | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Ord | Chr | Typeof | Not | Choose stack
+-- Avon jets a constructor of at most 32 arguments, and a one-field
+-- constructor of an n-way sum takes n + 1, so word keeps to 31: the
+-- kernel's further words are ext's, a sum of their own under one of word's
+ext     === Size | At
+word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | Sub | Mul | Div | Rem | Eql | Lt | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Ord | Chr | Typeof | Not | Choose stack | Ext ext
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
 
@@ -111,7 +115,7 @@ cat p q = p |> { Done q; Then w r (Then w (cat r q)) }
 -- a quotation's element as an item, and back: a literal is its value, any
 -- other word a symbol.  Lit pushes any item, a symbol too: dip puts its
 -- item back with Lit, so a symbol comes back as itself and does not run
-itemOf w = w |> { Ord (Sym w); Chr (Sym w); Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit a a; Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Stack (Sym w); Unstack (Sym w); Def d (Sym w); Typeof (Sym w); Not (Sym w); Choose v (Sym w) }
+itemOf w = w |> { Ord (Sym w); Chr (Sym w); Dup (Sym w); Swap (Sym w); Pop (Sym w); Qcons (Sym w); Cat (Sym w); Unit (Sym w); Dip (Sym w); Do (Sym w); Lit a a; Add (Sym w); Sub (Sym w); Mul (Sym w); Div (Sym w); Rem (Sym w); Eql (Sym w); Lt (Sym w); Branch (Sym w); Ifte (Sym w); Uncons (Sym w); Null (Sym w); Small (Sym w); Stack (Sym w); Unstack (Sym w); Def d (Sym w); Typeof (Sym w); Not (Sym w); Choose v (Sym w); Ext e (Sym w) }
 wordOf a = a |> { Num n (Lit a); Quot r (Lit a); Logical b (Lit a); Sym w w; Char c (Lit a); Str z (Lit a); Set z (Lit a) }
 -- the stack as a list, top first, and a list as the stack
 toProg s = s |> { Empty Done; Push a t (Then (wordOf a) (toProg t)) }
@@ -184,12 +188,12 @@ cSlash := Neg n15
 cLt := Neg n2
 cEq := Neg n1
 cGt := Neg Zero
-nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Not (TCons cn (TCons co (TCons ct TNil))); Choose v TNil }
+nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Not (TCons cn (TCons co (TCons ct TNil))); Choose v TNil; Ext e (e |> { Size (TCons cs (TCons ci (TCons cz (TCons ce TNil)))); At (TCons ca (TCons ct TNil)) }) }
 
 -- Joy's typeof (globals.h): a user-defined symbol 2, any other 3, a truth
 -- value 4, a character 5, an integer 6, a set 7, a string 8, a list 9
 kindOf a = a |> { Num z (Pos n6); Quot r (Pos n9); Logical b (Pos n4); Sym w (symKind w); Char c (Pos n5); Str z (Pos n8); Set z (Pos n7) }
-symKind w = w |> { Def d (d |> { Named n b (Pos n3); User n b (Pos n2) }); Dup (Pos n3); Swap (Pos n3); Pop (Pos n3); Qcons (Pos n3); Cat (Pos n3); Unit (Pos n3); Dip (Pos n3); Do (Pos n3); Lit a (Pos n3); Add (Pos n3); Sub (Pos n3); Mul (Pos n3); Div (Pos n3); Rem (Pos n3); Eql (Pos n3); Lt (Pos n3); Branch (Pos n3); Ifte (Pos n3); Uncons (Pos n3); Null (Pos n3); Small (Pos n3); Stack (Pos n3); Unstack (Pos n3); Ord (Pos n3); Chr (Pos n3); Typeof (Pos n3); Not (Pos n3); Choose v (Pos n3) }
+symKind w = w |> { Def d (d |> { Named n b (Pos n3); User n b (Pos n2) }); Dup (Pos n3); Swap (Pos n3); Pop (Pos n3); Qcons (Pos n3); Cat (Pos n3); Unit (Pos n3); Dip (Pos n3); Do (Pos n3); Lit a (Pos n3); Add (Pos n3); Sub (Pos n3); Mul (Pos n3); Div (Pos n3); Rem (Pos n3); Eql (Pos n3); Lt (Pos n3); Branch (Pos n3); Ifte (Pos n3); Uncons (Pos n3); Null (Pos n3); Small (Pos n3); Stack (Pos n3); Unstack (Pos n3); Ord (Pos n3); Chr (Pos n3); Typeof (Pos n3); Not (Pos n3); Choose v (Pos n3); Ext e (Pos n3) }
 
 -- the words' results, x below y on the stack
 subZ n m = plus n (minus m)
@@ -244,7 +248,23 @@ steps cmp ex w q s = w |> {
   Chr     (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Char n) t)); Quot r RErr; Logical b (ex q (Push (Char (boolZ b)) t)); Sym y RErr; Char c (ex q (Push (Char c) t)); Str xs RErr; Set st RErr }) });
   Typeof  (s |> { Empty RErr; Push a t (ex q (Push (Num (kindOf a)) t)) });
   Not     (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Logical (zero n)) t)); Quot r RErr; Logical b (ex q (Push (Logical (flip b)) t)); Sym y RErr; Char c (ex q (Push (Logical (zero c)) t)); Str xs RErr; Set z (ex q (Push (Set (compl z)) t)) }) });
-  Choose w (s |> { Empty RErr; Push a t (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (truth a |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr; Set st RErr }) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr; Set st RErr }) }) }) }
+  Choose w (s |> { Empty RErr; Push a t (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (truth a |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr; Set st RErr }) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr; Set st RErr }) }) });
+  Ext e   (exts e ex q s) }
+
+-- ext's words.  size counts an aggregate's members; at takes an index,
+-- an integer or a truth value, and the member there, its first at 0
+exts e ex q s = e |> {
+  Size (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (Push (Num (Pos (lenP r))) t)); Logical b RErr; Sym y RErr; Char c RErr; Str z (ex q (Push (Num (Pos (lenT z))) t)); Set z (ex q (Push (Num (Pos (lenS z))) t)) }) });
+  At   (s |> { Empty RErr; Push i t (index i |> { Neg k RErr; Pos m (t |> { Empty RErr; Push a u (a |> { Num n RErr; Quot r (atP m r ex q u); Logical b RErr; Sym y RErr; Char c RErr; Str z (atT m z ex q u); Set z (atS m z ex q u) }) }) }) }) }
+lenP r = r |> { Done Zero; Then w p (Suc (lenP p)) }
+lenT z = z |> { TNil Zero; TCons c r (Suc (lenT r)) }
+lenS z = z |> { SNil Zero; SCons m r (Suc (lenS r)) }
+-- an index as an integer, and anything else as a negative one, which no
+-- member has
+index i = i |> { Num z z; Quot r (Neg Zero); Logical b (boolZ b); Sym y (Neg Zero); Char c (Neg Zero); Str z (Neg Zero); Set z (Neg Zero) }
+atP m r ex q u = r |> { Done RErr; Then w p (m |> { Zero (ex q (Push (itemOf w) u)); Suc k (atP k p ex q u) }) }
+atT m z ex q u = z |> { TNil RErr; TCons c r (m |> { Zero (ex q (Push (Char c) u)); Suc k (atT k r ex q u) }) }
+atS m z ex q u = z |> { SNil RErr; SCons n r (m |> { Zero (ex q (Push (Num (Pos n)) u)); Suc k (atS k r ex q u) }) }
 
 -- The same loop without fuel, for level 1: there the interpreter's
 -- fuel bounds the run, so the object program needs none of its own.
