@@ -237,8 +237,8 @@ contractions on the reference reducer:
 
 | form | program | fuel | top is 6? | top is 7? |
 |---|---|---|---|---|
-| interpreted | `1 2 + dup +` | 7,000 | yes, 38,575,065 | no, 38,624,987 |
-| interpreted | `1 2 + sq` | 7,000 | yes, 39,777,702 | no, 39,828,632 |
+| interpreted | `1 2 + dup +` | 7,000 | yes, 40,555,362 | no, 40,607,048 |
+| interpreted | `1 2 + sq` | 7,000 | yes, 41,794,287 | no, 41,846,981 |
 | compiled | `1 2 + dup +` | 1,500 | yes, 2,328,665 | no, 2,342,964 |
 | compiled | `1 2 + sq` | 1,500 | yes, 2,337,648 | no, 2,351,954 |
 
@@ -913,6 +913,40 @@ as an integer, which the kernel's sets do not hold. `name body intern
 maxint` need the kernel: a symbol's name as a string, a definition's
 body, a string as a symbol, and an integer of 63 bits, beyond a unary
 numeral.
+
+*Numbers on skijack's operations (2026-10-25).* The first step of Avon's
+data-jet plan (its DESIGN §6.14). The kernel's naturals are skijack's
+prelude operations, `natAdd natSub natMul natIfEq natIfLe`, which Avon
+runs natively on numerals it holds as words but only when both operands
+are words already. So each operation cases on its numerals first, a
+computed one becoming a word as it is forced, and each integer operation
+on its integers; the compiled form's integers do the same, and its naturals,
+whose terms lean-ski proves for zk, keep their own. Division stays a
+loop of subtractions until skijack has `natDiv` and `natRem`.
+
+| program, to normal form, Avon with templates and data | before | after | operations |
+|---|---:|---:|---:|
+| `200 200 *` | 8,360,924 | 160,092 | 1 |
+| `200 200 * 7 /` | 8,607,178 | 131,564 | 11,430 |
+| `200 200 * 199 <` | 84,363 | 136 | 3 |
+| `200 200 * 199 200 * -` | 16,520,814 | 962 | 4 |
+| `6 fact` | 13,548 | 5,980 | 30 |
+| `30 sumto` | 17,805 | 15,750 | 149 |
+
+Without the cases, an operation on a computed number declines and runs
+as its term: `200 200 * 199 200 * -` took 398,959 steps. `200 200 *`
+spends what it spends printing 40,000 in unary; division is a loop of
+native subtractions and tests (11,430 of them) until skijack has `natDiv`
+and `natRem` (skijack #25, Avon #70: `100 7 /` in one operation, 148
+steps).
+
+On aviary, which runs the operations as their terms, no pinned outcome
+changes and the 363 pinned programs take 3.5% more interpreted
+contractions in all and 0.5% more compiled (each at most 1.42 of
+before); `step` is 57,842 atoms, from 45,016, and the interpreted
+level-1 runs take 40,555,362 and 41,794,287. A computed number reads
+back slower, so the reader gives a numeral the cap it gives a constructor
+(5,000,000 contractions), not skijack's 200,000.
 
 ## 4. Risks
 

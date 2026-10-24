@@ -29,8 +29,8 @@ INTERPRETED = {
     "p4": (('RVal', [1, 3]), 7_723, 7_677),
     "p5": (('RVal', [[('Lit', 1), ('Lit', 2)]]), 3_406, 3_409),
     "p6": (('RErr', None), 730, 751),
-    "p7": (('RVal', [6]), 120_176, 113_993),
-    "p8": (('RVal', [15]), 192_269, 177_947),
+    "p7": (('RVal', [6]), 125_182, 118_999),
+    "p8": (('RVal', [15]), 205_529, 191_207),
 }
 COMPILED = {
     "p1": (('RVal', [6]), 668, 668),
@@ -39,8 +39,8 @@ COMPILED = {
     "p4": (('RVal', [1, 3]), 968, 996),
     "p5": (('RVal', [('quot', ('RVal', [1, 2]))]), 273, 273),
     "p6": (('RErr', None), 8, 8),
-    "p7": (('RVal', [6]), 24_043, 23_605),
-    "p8": (('RVal', [15]), 39_822, 38_824),
+    "p7": (('RVal', [6]), 26_304, 25_866),
+    "p8": (('RVal', [15]), 48_507, 47_509),
 }
 
 
@@ -79,7 +79,7 @@ def test_a_kept_name_survives_as_itself():
 
 def test_interpreted_kernel_sizes(interp):
     s = interp.e.sizes
-    assert (s["exec"], s["execU"], s["step"]) == (45_076, 45_080, 45_016)
+    assert (s["exec"], s["execU"], s["step"]) == (57_902, 57_906, 57_842)
 
 
 @pytest.mark.parametrize("name", sorted(PROGRAMS))
@@ -93,7 +93,7 @@ def test_interpreted_outcomes_and_counts(interp, name):
 
 def test_compiled_kernel_sizes(comp):
     s = comp.e.sizes
-    assert (s["apply"], s["applyU"], s["seq"]) == (10_560, 10_564, 42)
+    assert (s["apply"], s["applyU"], s["seq"]) == (12_060, 12_064, 42)
     # every static quotation is one constructor of quot with one body;
     # the three runtime constructors are what cons, unit and cat build
     static = sorted(k for k in s if k[0] == "Q" and k[1:].isdigit())
