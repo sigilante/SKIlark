@@ -33,29 +33,28 @@ word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | 
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
 
--- naturals
-add m n = n |> { Zero m; Suc k (Suc (add m k)) }
-mul m n = n |> { Zero Zero; Suc k (add m (mul m k)) }
-less m n = n |> { Zero False; Suc j (m |> { Zero True; Suc i (less i j) }) }
-same m n = m |> { Zero (n |> { Zero True; Suc j False }); Suc i (n |> { Zero False; Suc j (same i j) }) }
-monus m n = n |> { Zero m; Suc j (m |> { Zero Zero; Suc i (monus i j) }) }
+-- naturals, on skijack's numeral operations, which a runtime may run
+-- natively on numerals it holds as words (avon DESIGN §6.10)
+add m n = natAdd m n
+mul m n = natMul m n
+less m n = natIfLe (Suc m) n True False
+same m n = natIfEq m n True False
+monus m n = natSub m n
 divN m n = less m n |> { False (Suc (divN (monus m n) n)); True Zero }
 remN m n = less m n |> { False (remN (monus m n) n); True m }
 -- truth values
 flip a = a |> { False True; True False }
-iff a b = a |> { False (flip b); True b }
--- integers: m - n of naturals, -k, the magnitude, the sign as a truth value
+-- integers: -k, m - n of naturals, the magnitude.  An operation cases on
+-- both its integers first, so their magnitudes reach it as numerals
 negN k = k |> { Zero (Pos Zero); Suc j (Neg j) }
-diff m n = m |> { Zero (negN n); Suc i (n |> { Zero (Pos m); Suc j (diff i j) }) }
+diff m n = natIfLe n m (Pos (natSub m n)) (negN (natSub n m))
 mag z = z |> { Pos m m; Neg m (Suc m) }
-isNeg z = z |> { Pos m False; Neg m True }
-signed s k = s |> { False (Pos k); True (negN k) }
 plus a b = a |> { Pos m (b |> { Pos n (Pos (add m n)); Neg n (diff m (Suc n)) }); Neg m (b |> { Pos n (diff n (Suc m)); Neg n (Neg (Suc (add m n))) }) }
 minus z = z |> { Pos m (negN m); Neg m (Pos (Suc m)) }
-times a b = signed (iff (isNeg a) (flip (isNeg b))) (mul (mag a) (mag b))
+times a b = a |> { Pos m (b |> { Pos n (Pos (natMul m n)); Neg n (negN (natMul m (Suc n))) }); Neg m (b |> { Pos n (negN (natMul (Suc m) n)); Neg n (Pos (natMul (Suc m) (Suc n))) }) }
 -- division truncates toward zero and the remainder takes the dividend's sign
-divide a b = signed (iff (isNeg a) (flip (isNeg b))) (divN (mag a) (mag b))
-modulo a b = signed (isNeg a) (remN (mag a) (mag b))
+divide a b = a |> { Pos m (b |> { Pos n (Pos (divN m n)); Neg n (negN (divN m (Suc n))) }); Neg m (b |> { Pos n (negN (divN (Suc m) n)); Neg n (Pos (divN (Suc m) (Suc n))) }) }
+modulo a b = a |> { Pos m (b |> { Pos n (Pos (remN m n)); Neg n (Pos (remN m (Suc n))) }); Neg m (b |> { Pos n (negN (remN (Suc m) n)); Neg n (negN (remN (Suc m) (Suc n))) }) }
 -- Joy's null and small read a number as an aggregate: null is zero, small
 -- is at most one (so every negative is small)
 zero z = z |> { Pos m (m |> { Zero True; Suc k False }); Neg m False }
@@ -63,7 +62,7 @@ upToOne z = z |> { Pos m (m |> { Zero True; Suc k (k |> { Zero True; Suc j False
 -- the reference's comparison (compare.h): two null values are the same;
 -- numbers and truth values (false 0, true 1) by value; symbols by name;
 -- anything else is More, in both orders
-cmpN m n = m |> { Zero (n |> { Zero Same; Suc j Less }); Suc i (n |> { Zero More; Suc j (cmpN i j) }) }
+cmpN m n = natIfEq m n Same (natIfLe m n Less More)
 cmpZ a b = a |> { Pos m (b |> { Pos n (cmpN m n); Neg n More }); Neg m (b |> { Pos n Less; Neg n (cmpN n m) }) }
 cmpT s t = s |> { TNil (t |> { TNil Same; TCons d u Less }); TCons c r (t |> { TNil More; TCons d u (cmpZ c d |> { Less Less; Same (cmpT r u); More More }) }) }
 both a b = a |> { False False; True b }

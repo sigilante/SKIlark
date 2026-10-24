@@ -853,25 +853,25 @@ wIfz ap s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot sc (t |> {{ E
 #: a compiled program's numbers when one can be negative: the kernel's
 #: integers, a sign and a magnitude
 COMPILED_INTEGERS = """
--- numbers, integers: Pos m is m, Neg m is -(m+1); x below y on the stack
-add m n = n |> {{ Zero m; Suc k (Suc (add m k)) }}
-mul m n = n |> {{ Zero Zero; Suc k (add m (mul m k)) }}
-lessN m n = n |> {{ Zero False; Suc j (m |> {{ Zero True; Suc i (lessN i j) }}) }}
-sameN m n = m |> {{ Zero (n |> {{ Zero True; Suc j False }}); Suc i (n |> {{ Zero False; Suc j (sameN i j) }}) }}
-monus m n = n |> {{ Zero m; Suc j (m |> {{ Zero Zero; Suc i (monus i j) }}) }}
+-- numbers, integers: Pos m is m, Neg m is -(m+1); x below y on the stack.
+-- The naturals' operations are skijack's, which a runtime may run natively
+-- (avon DESIGN §6.10), and an operation cases on both integers first, so
+-- their magnitudes reach it as numerals
+add m n = natAdd m n
+mul m n = natMul m n
+lessN m n = natIfLe (Suc m) n True False
+sameN m n = natIfEq m n True False
+monus m n = natSub m n
 divN m n = lessN m n |> {{ False (Suc (divN (monus m n) n)); True Zero }}
 remN m n = lessN m n |> {{ False (remN (monus m n) n); True m }}
-differ a b = a |> {{ False b; True (b |> {{ False True; True False }}) }}
 negN k = k |> {{ Zero (Pos Zero); Suc j (Neg j) }}
-diff m n = m |> {{ Zero (negN n); Suc i (n |> {{ Zero (Pos m); Suc j (diff i j) }}) }}
+diff m n = natIfLe n m (Pos (natSub m n)) (negN (natSub n m))
 mag z = z |> {{ Pos m m; Neg m (Suc m) }}
-isNeg z = z |> {{ Pos m False; Neg m True }}
-signed s k = s |> {{ False (Pos k); True (negN k) }}
 plus a b = a |> {{ Pos m (b |> {{ Pos n (Pos (add m n)); Neg n (diff m (Suc n)) }}); Neg m (b |> {{ Pos n (diff n (Suc m)); Neg n (Neg (Suc (add m n))) }}) }}
 minus z = z |> {{ Pos m (negN m); Neg m (Pos (Suc m)) }}
-times a b = signed (differ (isNeg a) (isNeg b)) (mul (mag a) (mag b))
-divide a b = signed (differ (isNeg a) (isNeg b)) (divN (mag a) (mag b))
-modulo a b = signed (isNeg a) (remN (mag a) (mag b))
+times a b = a |> {{ Pos m (b |> {{ Pos n (Pos (natMul m n)); Neg n (negN (natMul m (Suc n))) }}); Neg m (b |> {{ Pos n (negN (natMul (Suc m) n)); Neg n (Pos (natMul (Suc m) (Suc n))) }}) }}
+divide a b = a |> {{ Pos m (b |> {{ Pos n (Pos (divN m n)); Neg n (negN (divN m (Suc n))) }}); Neg m (b |> {{ Pos n (negN (divN (Suc m) n)); Neg n (Pos (divN (Suc m) (Suc n))) }}) }}
+modulo a b = a |> {{ Pos m (b |> {{ Pos n (Pos (remN m n)); Neg n (Pos (remN m (Suc n))) }}); Neg m (b |> {{ Pos n (negN (remN (Suc m) n)); Neg n (negN (remN (Suc m) (Suc n))) }}) }}
 less a b = a |> {{ Pos m (b |> {{ Pos n (lessN m n); Neg n False }}); Neg m (b |> {{ Pos n True; Neg n (lessN n m) }}) }}
 same a b = a |> {{ Pos m (b |> {{ Pos n (sameN m n); Neg n False }}); Neg m (b |> {{ Pos n False; Neg n (sameN m n) }}) }}
 num2 f s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (a |> {{ Num m (b |> {{ Num n (RVal (Push (f n m) u)); Quot r RErr{LC} }}); Quot r RErr{LC} }}) }}) }}

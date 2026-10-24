@@ -133,7 +133,7 @@ class Run:
         out = []
         ctor, fields = peel(term, self.t["set"], max_steps=STEPS)
         while ctor == "SCons":
-            out.append(self.pr.read_nat(fields[0]))
+            out.append(self.pr.read_nat(fields[0], max_steps=STEPS))
             ctor, fields = peel(fields[1], self.t["set"], max_steps=STEPS)
         return tuple(out)
 
@@ -152,9 +152,9 @@ class Run:
         """A numeral: a natural, or where the program's numbers are integers
         (``Pos m`` is m, ``Neg m`` is -(m+1)), an integer."""
         if "int" not in self.t:
-            return self.pr.read_nat(term)
+            return self.pr.read_nat(term, max_steps=STEPS)
         sign, fields = peel(term, self.t["int"], max_steps=STEPS)
-        m = self.pr.read_nat(fields[0])
+        m = self.pr.read_nat(fields[0], max_steps=STEPS)
         return m if sign == "Pos" else -(m + 1)
 
     def quot(self, term) -> Tuple[str, Outcome]:

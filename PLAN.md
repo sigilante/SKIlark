@@ -914,6 +914,31 @@ maxint` need the kernel: a symbol's name as a string, a definition's
 body, a string as a symbol, and an integer of 63 bits, beyond a unary
 numeral.
 
+*Numbers on skijack's operations (2026-10-25).* The first step of Avon's
+data-jet plan (its DESIGN §6.14). The kernel's naturals are skijack's
+prelude operations, `natAdd natSub natMul natIfEq natIfLe`, which Avon
+runs natively on numerals it holds as words, and each integer operation
+cases on both its integers first, so their magnitudes reach it as
+numerals; the compiled form's integers do the same, and its naturals,
+whose terms lean-ski proves for zk, keep their own. Division stays a
+loop of subtractions until skijack has `natDiv` and `natRem`.
+
+| program, to normal form, Avon with templates and data | before | after | operations |
+|---|---:|---:|---:|
+| `200 200 *` | 8,360,924 | 160,087 | 1 |
+| `200 200 * 7 /` | 8,607,178 | 291,607 | 5,715 |
+| `200 200 * 199 <` | 84,363 | 127 | 3 |
+| `200 200 * 199 200 * -` | 16,520,814 | 398,959 | 3 |
+| `6 fact` | 13,548 | 13,232 | 37 |
+| `30 sumto` | 17,805 | 16,915 | 181 |
+
+On aviary, which runs the operations as their terms, no pinned outcome
+changes and the 363 pinned programs take 3.4% more interpreted
+contractions in all and 0.2% more compiled (each at most 1.42 of
+before); `step` is 54,986 atoms, from 45,016. A computed number reads
+back slower, so the reader gives a numeral the cap it gives a constructor
+(5,000,000 contractions), not skijack's 200,000.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per

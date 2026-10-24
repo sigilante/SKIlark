@@ -160,6 +160,28 @@ Two changes cut CI from hours to a quarter of an hour:
   reduction against aviary in four shards (`SKILARK_SHARD`), and the slow
   tests run alone.
 
+## Numbers on skijack's operations
+
+The kernel's naturals on skijack's `natAdd natSub natMul natIfEq natIfLe`,
+the integer operations casing both integers first (PLAN.md §3). Avon,
+share mode with templates and data jets, to normal form:
+
+| program | before | after | native operations |
+|---|---:|---:|---:|
+| `200 200 *` | 8,360,924 | 160,087 | 1 |
+| `200 200 * 7 /` | 8,607,178 | 291,607 | 5,715 |
+| `200 200 * 199 <` | 84,363 | 127 | 3 |
+| `200 200 * 199 200 * -` | 16,520,814 | 398,959 | 3 |
+| `6 fact` | 13,548 | 13,232 | 37 |
+| `30 sumto` | 17,805 | 16,915 | 181 |
+| `[1 2 3] [dup *] map` | 6,409 | 5,870 | 12 |
+
+On aviary, which runs the operations as their terms: the 363 pinned
+programs take 3.4% more interpreted contractions and 0.2% more compiled;
+`step` is 54,986 atoms, from 45,016. Division is still a loop of native
+subtractions (5,715 of them above) until skijack has `natDiv` and
+`natRem`.
+
 ## Room left
 
 - *`word`:* 29 constructors of the 31 the cap allows (its one-field
