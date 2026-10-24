@@ -872,8 +872,8 @@ and Joy's `not`, the complement, as the kernel's 29th word.
   take 7.8% more interpreted contractions in all (median 0.97 of
   stage 5's) and 15.5% more compiled. The level-1 runs take 38,575,065
   and 39,777,702. Seventy-three programs and seven laws pin sets in
-  both forms (`tests/test_sets.py`); the dearest, `{1 2} [succ] map`,
-  takes 475,542 interpreted contractions.
+  both forms (`tests/test_sets.py`); the dearest, `{1 2 3} [2 <]
+  filter`, takes 475,542 interpreted contractions.
 
 ## 4. Risks
 
