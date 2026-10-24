@@ -142,9 +142,9 @@ half from one run to the next.
 | #11, step 1 | 1h22m | 1h33m | 1h01m | 52m | 1h04m |
 | #12, step 2 | 3h03m | 2h18m | 1h09m | 1h43m | 1h40m |
 | #13, step 3 | 2h24m | 1h41m | 1h24m | 2h13m | 1h09m |
-
 | #15, a linear abstraction, xdist, Avon | 58m (reference) | 16m | 11m | 12m | 9m |
 | #16, the reference in four shards | 9–15m (and slow, 3m) | 14m | 11m | 12m | 10m |
+| #18, stage 7 and the numbers | 34–43m (and slow, 3m) | 23m | 16m | 15m | 15m |
 
 Two changes cut CI from hours to a quarter of an hour:
 
@@ -170,6 +170,8 @@ share mode with templates and data jets, to normal form:
 |---|---:|---:|---:|
 | `200 200 *` | 8,360,924 | 160,092 | 1 |
 | `200 200 * 7 /` | 8,607,178 | 131,564 | 11,430 |
+| `200 200 * 7 /`, on `natDiv` | 131,564 | 22,986 | 2 |
+| `200 200 * 7 rem`, on `natRem` | 108,716 | 138 | 2 |
 | `200 200 * 199 <` | 84,363 | 136 | 3 |
 | `200 200 * 199 200 * -` | 16,520,814 | 962 | 4 |
 | `6 fact` | 13,548 | 5,980 | 30 |
@@ -180,9 +182,10 @@ Each operation cases on its numerals first: an operation fires natively
 only on words, and without the cases `200 200 * 199 200 * -` took 398,959.
 On aviary, which runs the operations as their terms: the 363 pinned
 programs take 3.5% more interpreted contractions and 0.5% more compiled;
-`step` is 57,842 atoms, from 45,016. Division is still a loop of native
-subtractions until SKIlark takes up skijack's `natDiv` and `natRem`
-(skijack #25, Avon #70), with skijack's next release.
+`step` was 57,842 atoms, from 45,016. Division then took skijack 0.2.2's
+`natDiv` and `natRem` (skijack #25, Avon #70) in place of a loop of
+native subtractions, the two rows marked: `step` is 57,570 atoms, and the
+three pinned programs that divide take 0.2% to 0.4% fewer contractions.
 
 ## Room left
 
@@ -196,5 +199,6 @@ subtractions until SKIlark takes up skijack's `natDiv` and `natRem`
   interpreted word a few percent.
 - *SKIjack's nesting:* programs past 240 levels spill into equations;
   the deepest pinned program nests 174.
-- *CI:* the Python jobs take one to two and a half hours, the Avon job
-  up to three; GitHub stops a job at six.
+- *CI:* the Python jobs take 15 to 23 minutes and the reference shards
+  34 to 43, against GitHub's six-hour stop; a fifth shard is the next
+  lever when the shards pass an hour.
