@@ -11,8 +11,7 @@ import joyref
 
 #: the definitions SKIlark has and the reference does not: Kerby's words
 #: and the two programs; the reference runs them as user definitions
-OWN = {k: v for k, v in joy.DEFINITIONS.items()
-       if k in ("nip", "tuck", "rot", "sip", "k", "y", "sumto", "fact")}
+OWN = {k: v for k, v in joy.DEFINITIONS.items() if k in joy.USER_WORDS}
 
 
 def reference(text: str) -> Tuple[str, Optional[list]]:

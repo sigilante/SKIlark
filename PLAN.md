@@ -155,14 +155,14 @@ programs, host contractions, unfuelled (`uP`) and fuelled (`rP`):
 
 | Joy | result | interpreted | fuelled | compiled | fuelled |
 |---|---|---|---|---|---|
-| `1 2 + dup +` | `6` | 4,808 | 4,797 | 668 | 668 |
-| `3 [dup +] i` | `6` | 4,521 | 4,510 | 636 | 650 |
-| `1 2 over` | `1 2 1` | 5,546 | 5,518 | 652 | 666 |
-| `1 [2] [3] k` | `1 3` | 7,153 | 7,100 | 872 | 900 |
-| `1 2 unit cons` | `[1 2]` | 3,153 | 3,149 | 273 | 273 |
-| `+` (empty stack) | `RErr` | 674 | 688 | 8 | 8 |
-| `3 sumto` | `6` | 89,332 | 85,262 | 18,100 | 17,701 |
-| `5 sumto` | `15` | 140,114 | 131,102 | 30,103 | 29,204 |
+| `1 2 + dup +` | `6` | 4,952 | 4,941 | 668 | 668 |
+| `3 [dup +] i` | `6` | 4,665 | 4,654 | 684 | 698 |
+| `1 2 over` | `1 2 1` | 5,750 | 5,722 | 700 | 714 |
+| `1 [2] [3] k` | `1 3` | 7,417 | 7,364 | 968 | 996 |
+| `1 2 unit cons` | `[1 2]` | 3,269 | 3,265 | 273 | 273 |
+| `+` (empty stack) | `RErr` | 702 | 716 | 8 | 8 |
+| `3 sumto` | `6` | 114,900 | 108,710 | 24,043 | 23,605 |
+| `5 sumto` | `15` | 184,099 | 169,770 | 39,822 | 38,824 |
 
 The counts are the kernel with Joy's stages 1 to 6 (§3), and
 `sumto` is written with `ifte` and `pred`, since `ifz` has left the
@@ -171,7 +171,7 @@ y`. That puts integers and truth values into the compiled set too. On
 the basis kernel alone (`programs/basis.ascii.ski`), which §3's
 measurements run, with `sumto` by `ifz`, `1 2 + dup +` took 2,014
 interpreted and 493 compiled, and `5 sumto` 49,568 and 18,186, unfuelled:
-a `word` of 27 constructors, an `item` of six, a signed number and the
+a `word` of 28 constructors, an `item` of six, a signed number and the
 reference's comparison make every dispatch dearer.
 
 Fuel is one unit per word interpreted and one per quotation applied
@@ -236,12 +236,12 @@ contractions on the reference reducer:
 
 | form | program | fuel | top is 6? | top is 7? |
 |---|---|---|---|---|
-| interpreted | `1 2 + dup +` | 7,000 | yes, 33,524,535 | no, 33,571,230 |
-| interpreted | `1 2 + sq` | 7,000 | yes, 34,659,638 | no, 34,707,341 |
+| interpreted | `1 2 + dup +` | 7,000 | yes, 35,243,483 | no, 35,291,186 |
+| interpreted | `1 2 + sq` | 7,000 | yes, 36,399,854 | no, 36,448,565 |
 | compiled | `1 2 + dup +` | 1,500 | yes, 2,328,665 | no, 2,342,964 |
 | compiled | `1 2 + sq` | 1,500 | yes, 2,337,648 | no, 2,351,954 |
 
-Beside the level-0 counts of `1 2 + dup +` alone (4,808 interpreted,
+Beside the level-0 counts of `1 2 + dup +` alone (4,952 interpreted,
 493 compiled) the cost of virtualization is five to eight thousandfold:
 each emulated step walks and rebuilds a spine of thousands of atoms, and
 the interpreted form pays for its bigger term twice over. The
@@ -786,6 +786,49 @@ and sets arrive as an item and the cases the kernel's words take for it.
   most. The compiled form has no `word` and keeps its counts. The level-1 runs
   fall from 40,205,700 and 41,419,680 contractions to 33,524,535 and
   34,659,638.
+- *Joy's `typeof`.* The kernel's 28th constructor numbers a value's type
+  as the reference's globals.h does: a user-defined symbol 2, a builtin
+  3, a truth value 4, a character 5, an integer 6, a string 8, a list 9,
+  and a set, which step 3 brings, 7. A `Def` is `Named` (one of Joy's) or `User` (the program's
+  own, Kerby's words and the two programs among them, or one of Joy's
+  names with another body), and the compiled form's user symbols are
+  `U` and the name. `integer char logical set string list leaf user`
+  are `typeof` and a comparison, `float` and `file` are false of every
+  value SKIlark has, and `sametype` derives as sametype.c reads it: a
+  builtin on top is the same type as the same builtin alone.
+- *Each word checks its arguments as the reference does.* Of the ten
+  deviations nine close. `and or xor max min` check that their two
+  arguments are of one type (SAME2TYPES), `succ pred max min` give a
+  truth value back as an integer, `take drop at of` take a truth value
+  as an index, `primrec` refuses a character, and every derived
+  combinator checks its quotations before it runs one, so `0 5 times`
+  and `[] 5 map` err as the reference's do. `map` gives a string's
+  results back as C chars, so `"ab" [ord] map` is `"ab"`. The checks
+  are `typeof` and comparisons, without `ord` or a subtraction, so a
+  compiled program keeps its naturals and has characters only where it
+  did; the compiled form drops `map`'s string branch from a program set
+  with no string literal, since only a literal makes a string. `genrec`
+  stays the one deviation: its R2 sees a quotation, not the reference's
+  own word.
+- *What the checks cost.* `step` is 34,204 atoms. No pinned outcome
+  changes. The 161 pinned programs take 15.0% more interpreted
+  contractions than at step 1 (4.4% more than at stage 5) and 19.0% more
+  compiled; `succ` and `pred`, which must tell a truth value from an
+  integer, cost most: `5 succ` takes 9,372 interpreted and 3,183 compiled
+  contractions, from 2,772 and 427, and `5 sumto` 184,099 and 39,822,
+  from 140,114 and 30,103. The level-1 runs take 35,243,483 and
+  36,399,854. Forty-six programs and six laws pin the types
+  in both forms (`tests/test_types.py`), and zk's sources stay byte for
+  byte.
+- *Deep programs spill.* SKIjack refuses an expression whose
+  applications nest more than 256 deep, and a program nests about a
+  level a word, so inlined checks put a random program of a few
+  combinators past it. Past 240 levels the front end makes a
+  subexpression an equation of its own, of the same parameters: a
+  datum's has none and costs nothing at run time, and a compiled body's
+  takes `ap`. No pinned program spills; the deepest nests 174 levels. The model
+  keeps integers to 64 bits, as the reference's are, and calls a result
+  past them undefined, so the fuzz never squares a number without end.
 
 ## 4. Risks
 
@@ -809,7 +852,8 @@ and sets arrive as an item and the cases the kernel's words take for it.
   arguments, and the largest, the one-field constructors of a 31-way
   sum, take 32: the cap. Stage 3 made room by deriving seven words,
   stage 4 derived its thirteen combinators, and stage 6 merged the five
-  literals into one, leaving `word` at 27 constructors (§3, stage 6).
+  literals into one, leaving `word` at 28 constructors with `typeof`
+  (§3, stage 6).
   That is the
   intended story and the write-up says so before a reviewer does.
 - **`I` and `Cons` are reserved.** Joy's `i` is `Do`, its `cons` is

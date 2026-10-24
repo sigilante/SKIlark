@@ -164,6 +164,15 @@ def truth(v: Value) -> bool:
     return True                                     # USR_, ANON_FUNCT_
 
 
+def int64(n: int) -> int:
+    """An integer result, which the reference keeps in an int64_t: past
+    that range its C arithmetic overflows, which the model does not
+    follow."""
+    if not -(1 << 63) <= n < (1 << 63):
+        raise Undefined("an integer past 64 bits")
+    return n
+
+
 def c_div(a: int, b: int) -> int:
     """C's ``/``: truncation toward zero."""
     q = abs(a) // abs(b)
@@ -402,7 +411,7 @@ class Joy:
             raise JoyError("integer")
         if s[-2][0] not in ("N", "C"):              # NUMERIC2: integer or char
             raise JoyError("numeric second parameter")
-        b = s.pop(); a = s.pop(); s.append((a[0], op(a[1], b[1])))
+        b = s.pop(); a = s.pop(); s.append((a[0], int64(op(a[1], b[1]))))
 
     def w_plus(self, s):
         self.plusminus(s, lambda a, b: a + b)
@@ -414,7 +423,7 @@ class Joy:
         self.params(s, 2)
         if s[-1][0] != "N" or s[-2][0] != "N":
             raise JoyError("two integers")
-        b = s.pop(); a = s.pop(); s.append(("N", a[1] * b[1]))
+        b = s.pop(); a = s.pop(); s.append(("N", int64(a[1] * b[1])))
 
     def w_divide(self, s):
         self.params(s, 2)
@@ -422,7 +431,7 @@ class Joy:
             raise JoyError("non-zero divisor")
         if s[-1][0] != "N" or s[-2][0] != "N":
             raise JoyError("two integers")
-        b = s.pop(); a = s.pop(); s.append(("N", c_div(a[1], b[1])))
+        b = s.pop(); a = s.pop(); s.append(("N", int64(c_div(a[1], b[1]))))
 
     def w_rem(self, s):
         self.params(s, 2)
@@ -436,7 +445,7 @@ class Joy:
         self.params(s, 1)
         if not numeric(s[-1]):
             raise JoyError("numeric")
-        v = s.pop(); s.append(("C" if v[0] == "C" else "N", num(v) + d))
+        v = s.pop(); s.append(("C" if v[0] == "C" else "N", int64(num(v) + d)))
 
     def w_succ(self, s):
         self.predsucc(s, 1)
@@ -468,13 +477,13 @@ class Joy:
         return s.pop()[1]
 
     def w_abs(self, s):
-        s.append(("N", abs(self.integer1(s))))
+        s.append(("N", int64(abs(self.integer1(s)))))
 
     def w_sign(self, s):
         n = self.integer1(s); s.append(("N", (n > 0) - (n < 0)))
 
     def w_neg(self, s):
-        s.append(("N", -self.integer1(s)))
+        s.append(("N", int64(-self.integer1(s))))
 
     def w_ord(self, s):                 # ord.c, ordchr.h
         self.params(s, 1)
@@ -706,6 +715,60 @@ class Joy:
 
     def w_fold(self, s):                # fold.c: swapd step
         self.params(s, 3); self.w_swapd(s); self.w_step(s)
+
+    # -- types (typeof.c, type.h, sametype.c; globals.h numbers them)
+
+    def kind(self, v: Value) -> int:
+        """``nodetype``: a symbol is a builtin (ANON_FUNCT_, 3) or a user
+        definition (USR_, 2), as the reader made it."""
+        if v[0] == "S":
+            return 3 if v[1] in self.b else 2
+        return {"B": 4, "C": 5, "N": 6, "Z": 7, "T": 8, "L": 9}[v[0]]
+
+    def w_typeof(self, s):
+        self.params(s, 1); s.append(("N", self.kind(s.pop())))
+
+    def type_test(self, s, test):       # type.h TYPE: ONEPARAM, then the test
+        self.params(s, 1); s.append(("B", test(self.kind(s.pop()))))
+
+    def w_integer(self, s):
+        self.type_test(s, lambda k: k == 6)
+
+    def w_char(self, s):
+        self.type_test(s, lambda k: k == 5)
+
+    def w_logical(self, s):
+        self.type_test(s, lambda k: k == 4)
+
+    def w_set(self, s):
+        self.type_test(s, lambda k: k == 7)
+
+    def w_string(self, s):
+        self.type_test(s, lambda k: k == 8)
+
+    def w_list(self, s):
+        self.type_test(s, lambda k: k == 9)
+
+    def w_leaf(self, s):
+        self.type_test(s, lambda k: k != 9)
+
+    def w_user(self, s):
+        self.type_test(s, lambda k: k == 2)
+
+    def w_float(self, s):               # no value here is a float or a file
+        self.type_test(s, lambda k: k == 10)
+
+    def w_file(self, s):
+        self.type_test(s, lambda k: k == 11)
+
+    def w_sametype(self, s):            # a builtin on top: the same builtin
+        self.params(s, 2)
+        y = s.pop(); x = s.pop()
+        if self.kind(y) == 3:
+            same = self.kind(x) == 3 and x[1] == y[1]
+        else:
+            same = self.kind(x) == self.kind(y)
+        s.append(("B", same))
 
     # -- SKIlark's own kernel words, from Kerby's basis: not Joy's, so the
     #    reference has them as definitions; these are what they define

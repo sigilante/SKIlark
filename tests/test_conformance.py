@@ -14,6 +14,7 @@ import joyref
 import test_combinators as C
 import test_modes as M
 import test_text as T
+import test_types as Y
 import test_words as W
 from skilark import compiled, interpreted
 
@@ -21,10 +22,12 @@ from skilark import compiled, interpreted
 PINNED = ([("words", n, p) for n, p in W.PROGRAMS.items()]
           + [("combinators", n, p) for n, p in C.PROGRAMS.items()]
           + [("text", n, p) for n, p in T.PROGRAMS.items()]
+          + [("types", n, p) for n, p in Y.PROGRAMS.items()]
           + [("modes", n, p) for n, p in M.PROGRAMS.items()])
 TABLES = {"words": (W.INTERPRETED, W.COMPILED),
           "combinators": (C.INTERPRETED, C.COMPILED),
           "text": (T.INTERPRETED, T.COMPILED),
+          "types": (Y.INTERPRETED, Y.COMPILED),
           "modes": (M.INTERPRETED, M.COMPILED)}
 
 
@@ -38,37 +41,14 @@ def test_the_pinned_outcome_is_the_references(module, name, text):
 
 #: where SKIlark and the reference part: program -> (the reference's
 #: outcome, SKIlark's in both forms as the interpreted form reads it, why).
-#: A derived word cannot tell one kind of number from another (a truth
-#: value from an integer or a character): Joy has tests for them
-#: (``logical``, ``integer``, ``char``), which the kernel does not have;
-#: and a derived combinator checks a quotation when it runs it.
+#: Since stage 6 a derived word checks its arguments' types as the
+#: reference does (``typeof``), and a combinator its quotations before it
+#: runs one, so one deviation is left.
 DEVIATIONS = {
-    "true 5 and": (("RErr", None), ("RVal", [True]),
-                   "and takes two values of one kind; the derived and cannot compare kinds"),
-    "true 1 xor": (("RErr", None), ("RVal", [False]),
-                   "xor takes two values of one kind"),
-    "3 true max": (("RErr", None), ("RVal", [3]),
-                   "max takes two numbers of one kind"),
-    "true false max": (("RVal", [("N", 1)]), ("RVal", [True]),
-                       "max of truth values is an integer in the reference"),
-    "true succ": (("RVal", [("N", 2)]), ("RErr", None),
-                  "succ of a truth value is an integer; the derived succ is 1 +, "
-                  "which takes no truth value"),
-    "[1 2] true take": (("RVal", [("L", (("N", 1),))]), ("RErr", None),
-                        "take's index may be a truth value in the reference"),
-    "1 [pop true] [5] 7 tailrec": (("RErr", None), ("RVal", [1, 5]),
-                                   "tailrec checks its three quotations at once; the derived "
-                                   "tailrec checks R1 only when it runs it"),
     "2 [0 =] [5] [pred] [first size] genrec": (
         ("RVal", [("N", 1), ("N", 5)]), ("RVal", [1, 11]),
         "genrec hands R2 [[[B] [T] [R1] R2] #genrecaux], the reference's own word; "
         "the derived genrec hands it a quotation that recurses through y"),
-    '"ab" [ord] map': (("RVal", [("T", (97, 98))]), ("RErr", None),
-                       "map on a string keeps P's results as C chars, whatever their kind; "
-                       "the derived map conses each onto a string, which takes only characters"),
-    "'\\002 [0] [pop] primrec": (("RErr", None), ("RVal", [("Char", 2)]),
-                                 "primrec takes an integer or an aggregate; the derived primrec "
-                                 "counts a character down as it does an integer"),
 }
 
 
