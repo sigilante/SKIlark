@@ -159,6 +159,11 @@ Two changes cut CI from hours to a quarter of an hour:
   suite in 2.5 minutes locally); the reference job checks every
   reduction against aviary in four shards (`SKILARK_SHARD`), and the slow
   tests run alone.
+- *The reference on demand* (#20). The pinned outcomes and counts hold
+  Avon to aviary's numbers in every job, so the reference runs on each
+  push to master and on a pull request labelled `reference`. An unlabelled
+  pull request waits for its slowest Python job, 15 to 24 minutes, not
+  for the shards' 20 to 47.
 
 ## Numbers on skijack's operations
 
