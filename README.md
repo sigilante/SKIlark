@@ -51,6 +51,8 @@ namespace.
   (`python -m skilark.variants`). Church fuel cut a fuelled run to a
   quarter and is now the kernel's; the splice stays (`PLAN.md` §3).
 - `PLAN.md` — what is built, what was measured, and what comes next.
+- `BENCHMARKS.md` — stage 6's costs and savings, step by step, in
+  contractions, on Avon and in CI.
 
 ```
 pip install -e ".[test]"

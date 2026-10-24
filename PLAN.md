@@ -817,8 +817,8 @@ and Joy's `not`, the complement, as the kernel's 29th word.
   contractions than at step 1 (4.4% more than at stage 5) and 19.0% more
   compiled; `succ` and `pred`, which must tell a truth value from an
   integer, cost most: `5 succ` takes 9,372 interpreted and 3,183 compiled
-  contractions, from 2,772 and 427, and `5 sumto` 184,099 and 39,822,
-  from 140,114 and 30,103. The level-1 runs take 35,243,483 and
+  contractions, from step 1's 2,772 and 427, and `5 sumto` 184,099 and
+  39,822, from 140,114 and 30,103. `BENCHMARKS.md` tabulates every step. The level-1 runs take 35,243,483 and
   36,399,854. Forty-six programs and six laws pin the types
   in both forms (`tests/test_types.py`), and zk's sources stay byte for
   byte.
