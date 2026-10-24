@@ -17,15 +17,18 @@ namespace.
   (a set's complement). `succ pred max min neg abs sign and or > <= >=
   != xor first rest swons unswons concat size at of take drop has in`
   are derived, and so are the type tests `integer char logical set
-  string list leaf user float file sametype` and Joy's combinators,
+  string list leaf user float file sametype`, Joy's combinators,
   `nullary infra times while tailrec linrec binrec genrec primrec map
-  filter step fold`; run by a fold over the program (`exec`, one unit of
-  fuel per word, the fuel the Church numeral 1,000; `execU`, no fuel).
+  filter step fold`, and its library words (`unary2 cleave construct
+  cond case split some all equal treerec` and their kin, PLAN.md §3,
+  stage 7); run by a fold over the program (`exec`, one unit of
+  fuel per word, the fuel the Church numeral 10,000; `execU`, no fuel).
   SKIlark grows toward Joy in full, in stages (`PLAN.md` §3), and Joy's
   behaviour is the reference implementation's: `tests/joyref.py` models
   it, and the tests check every pinned outcome against the model, but
-  for one deviation pinned with its reason (`genrec`'s R2 sees a
-  quotation, not the reference's own word). `word` has 29 constructors,
+  for three deviations pinned with their reason (`genrec`'s R2 and
+  `treerec`'s and `treegenrec`'s C see a quotation, not the reference's
+  own word). `word` has 29 constructors,
   under Avon's cap of 32 arguments (`PLAN.md` §3, stage 6).
   `basis.ascii.ski` is the basis alone, with
   SKIlark's own `ifz`, as phase 3 measured it.

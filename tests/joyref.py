@@ -845,6 +845,284 @@ class Joy:
             same = self.kind(x) == self.kind(y)
         s.append(("B", same))
 
+    # -- more stack words, and choice (dipped.h, choice.c)
+
+    def dipped(self, s, word):
+        self.params(s, 4)
+        w = s.pop(); word(s); s.append(w)
+
+    def w_rollupd(self, s):
+        self.dipped(s, self.w_rollup)
+
+    def w_rolldownd(self, s):
+        self.dipped(s, self.w_rolldown)
+
+    def w_rotated(self, s):
+        self.dipped(s, self.w_rotate)
+
+    def w_choice(self, s):              # B T F -> T or F
+        self.params(s, 3)
+        f = s.pop(); t = s.pop(); b = s.pop(); s.append(t if truth(b) else f)
+
+    def w_setsize(self, s):
+        s.append(("N", SETSIZE))
+
+    def w_enconcat(self, s):            # enconcat.c: SAME2TYPES, swapd cons concat
+        self.params(s, 3)
+        if s[-1][0] != s[-2][0]:
+            raise JoyError("same types")
+        self.w_swapd(s); self.w_cons(s); self.w_concat(s)
+
+    # -- the n-ary combinators
+
+    @staticmethod
+    def value(c: Stack) -> Value:
+        """The top of a stack P left, which the C code takes unchecked."""
+        if not c:
+            raise Undefined("a combinator's program left an empty stack")
+        return c[-1]
+
+    def w_app1(self, s):                # app1.c: X [P] -> R
+        self.params(s, 2); self.quotes(s, 1); self.exe(s, s.pop()[1])
+
+    def w_app11(self, s):               # app11.c: i, popd
+        self.params(s, 3); self.quotes(s, 1); self.w_i(s); self.w_popd(s)
+
+    def w_app12(self, s):               # app12.c: unary2, rolldown, pop
+        self.params(s, 4); self.w_unary2(s); self.w_rolldown(s); self.w_pop(s)
+
+    def n_ary(self, s, n):              # n_ary.h: the result on the stack below n
+        self.params(s, n + 1); self.quotes(s, 1)
+        p = s.pop(); c = list(s); self.exe(c, p[1])
+        if not c:
+            raise JoyError("value to push")     # CHECKVALUE
+        r = c[-1]
+        del s[len(s) - n:]
+        s.append(r)
+
+    def w_unary(self, s):
+        self.n_ary(s, 1)
+
+    def w_binary(self, s):
+        self.n_ary(s, 2)
+
+    def w_ternary(self, s):
+        self.n_ary(s, 3)
+
+    def unary_n(self, s, n):            # unary2.c ...: P on each Xi, the rest below
+        self.params(s, n + 1); self.quotes(s, 1)
+        p = s.pop(); xs = s[len(s) - n:]; del s[len(s) - n:]
+        out = []
+        for x in xs:
+            c = s + [x]; self.exe(c, p[1]); out.append(self.value(c))
+        s.extend(out)
+
+    def w_unary2(self, s):
+        self.unary_n(s, 2)
+
+    def w_unary3(self, s):
+        self.unary_n(s, 3)
+
+    def w_unary4(self, s):
+        self.unary_n(s, 4)
+
+    def w_app2(self, s):
+        self.unary_n(s, 2)
+
+    def w_app3(self, s):
+        self.unary_n(s, 3)
+
+    def w_app4(self, s):
+        self.unary_n(s, 4)
+
+    def w_cleave(self, s):              # cleave.c: X [P1] [P2] -> R1 R2
+        self.params(s, 3); self.quotes(s, 2)
+        p2 = s.pop(); p1 = s.pop()
+        c1 = list(s); self.exe(c1, p1[1]); r1 = self.value(c1)
+        c2 = list(s); self.exe(c2, p2[1]); r2 = self.value(c2)
+        s.pop(); s.append(r1); s.append(r2)
+
+    def w_construct(self, s):           # construct.c: [P] [[P1] ..] -> R1 ..
+        self.params(s, 2); self.quotes(s, 2)
+        ps = s.pop(); p = s.pop()
+        new = list(s); self.exe(new, p[1])
+        out = []
+        for q in ps[1]:
+            if q[0] != "L":
+                raise Undefined("construct of a member that is not a quotation")
+            c = list(new); self.exe(c, q[1]); out.append(self.value(c))
+        s.extend(out)
+
+    # -- the type conditionals (if_type.h)
+
+    def if_type(self, s, kind):
+        self.params(s, 3); self.quotes(s, 2)
+        e = s.pop(); t = s.pop()
+        self.exe(s, t[1] if self.kind(s[-1]) == kind else e[1])
+
+    def w_ifinteger(self, s):
+        self.if_type(s, 6)
+
+    def w_ifchar(self, s):
+        self.if_type(s, 5)
+
+    def w_iflogical(self, s):
+        self.if_type(s, 4)
+
+    def w_ifset(self, s):
+        self.if_type(s, 7)
+
+    def w_ifstring(self, s):
+        self.if_type(s, 8)
+
+    def w_iflist(self, s):
+        self.if_type(s, 9)
+
+    def w_iffloat(self, s):
+        self.if_type(s, 10)
+
+    def w_iffile(self, s):
+        self.if_type(s, 11)
+
+    # -- cond, case, opcase (cond.c, case.c, opcase.c)
+
+    def w_cond(self, s):                # [..[[Bi] Ti..].. [D]]
+        self.params(s, 1)
+        if s[-1][0] != "L":
+            raise JoyError("list")
+        cs = s.pop()[1]
+        if not cs:
+            raise JoyError("non-empty list")
+        for c in cs[:-1]:
+            if c[0] != "L" or not c[1]:
+                raise Undefined("cond of a clause that is not a list")
+            if c[1][0][0] != "L":
+                raise JoyError("quotation")     # CHECKLIST
+        for c in cs[:-1]:
+            if self.test(s, c[1][0][1]):
+                self.exe(s, c[1][1:])
+                return
+        if cs[-1][0] != "L":
+            raise Undefined("cond's default is not a list")
+        self.exe(s, cs[-1][1])
+
+    def w_case(self, s):                # X [..[X Y..].. [D]]
+        self.params(s, 2)
+        if s[-1][0] != "L":
+            raise JoyError("list")
+        cs = s.pop()[1]
+        if not cs:
+            raise JoyError("non-empty list")
+        i = 0
+        while i < len(cs) - 1 and cs[i][0] == "L":
+            if not cs[i][1]:
+                raise Undefined("case of an empty clause")
+            if compare(cs[i][1][0], s[-1]) == 0:
+                break
+            i += 1
+        if cs[i][0] != "L":
+            raise JoyError("list")              # CHECKLIST
+        if i < len(cs) - 1:
+            s.pop(); self.exe(s, cs[i][1][1:])
+        else:
+            self.exe(s, cs[i][1])
+
+    def w_opcase(self, s):              # X [..[X Xs..].. [D]] -> X [Xs]
+        self.params(s, 2)
+        if s[-1][0] != "L":
+            raise JoyError("list")
+        cs = s.pop()[1]
+        if not cs:
+            raise JoyError("non-empty list")
+        x = s[-1]
+        i = 0
+        while i < len(cs) - 1 and cs[i][0] == "L":
+            if not cs[i][1]:
+                raise Undefined("opcase of an empty clause")
+            t = cs[i][1][0]
+            if self.kind(x) == self.kind(t) and (self.kind(x) != 3 or x[1] == t[1]):
+                break
+            i += 1
+        if cs[i][0] != "L":
+            raise JoyError("list")
+        s.append(("L", cs[i][1][1:] if i < len(cs) - 1 else cs[i][1]))
+
+    # -- split, some, all (split.c, someall.h)
+
+    def w_split(self, s):               # A [B] -> A1 A2
+        self.params(s, 2); self.quotes(s, 1)
+        p = s.pop(); a = s.pop(); self.aggregate(a)
+        yes, no = [], []
+        for v in self.members(a):
+            (yes if self.test(s + [v], p[1]) else no).append(v)
+        s.append(self.build(a[0], yes)); s.append(self.build(a[0], no))
+
+    def someall(self, s, initial):
+        self.params(s, 2); self.quotes(s, 1)
+        p = s.pop(); a = s.pop(); self.aggregate(a)
+        result = initial
+        for v in self.members(a):
+            if self.test(s + [v], p[1]) != initial:
+                result = not initial
+                break
+        s.append(("B", result))
+
+    def w_some(self, s):
+        self.someall(s, False)
+
+    def w_all(self, s):
+        self.someall(s, True)
+
+    # -- equal.c
+
+    def equal(self, a: Value, b: Value) -> bool:
+        if a[0] == "L" and b[0] == "L":
+            return len(a[1]) == len(b[1]) and all(self.equal(x, y) for x, y in zip(a[1], b[1]))
+        return compare(a, b) == 0
+
+    def w_equal(self, s):
+        self.params(s, 2)
+        b = s.pop(); a = s.pop(); s.append(("B", self.equal(b, a)))
+
+    # -- the tree combinators (treestep.c, treerec.c, treegenrec.c)
+
+    def w_treestep(self, s):            # T [P]
+        self.params(s, 2); self.quotes(s, 1)
+        p = s.pop(); t = s.pop()
+
+        def aux(item):
+            if item[0] != "L":
+                s.append(item); self.exe(s, p[1])
+            else:
+                for x in item[1]:
+                    aux(x)
+        aux(t)
+
+    def w_treerec(self, s):             # T [O] [C]
+        self.params(s, 3); self.quotes(s, 2)
+        self.w_cons(s); self.w_treerecaux(s)
+
+    def w_treerecaux(self, s):          # T [[O] C]
+        if s[-2][0] == "L":
+            s.append(("L", (("S", "#treerecaux"),)))
+            self.w_cons(s)
+            self.exe(s, s[-1][1][0][1][1:])
+        else:
+            oc = s.pop(); self.exe(s, oc[1][0][1])
+
+    def w_treegenrec(self, s):          # T [O1] [O2] [C]
+        self.params(s, 4); self.quotes(s, 3)
+        self.w_cons(s); self.w_cons(s); self.w_treegenrecaux(s)
+
+    def w_treegenrecaux(self, s):       # T [[O1] [O2] C]
+        if s[-2][0] == "L":
+            ooc = s.pop(); self.exe(s, ooc[1][1][1]); s.append(ooc)
+            s.append(("L", (("S", "#treegenrecaux"),)))
+            self.w_cons(s)
+            self.exe(s, s[-1][1][0][1][2:])
+        else:
+            ooc = s.pop(); self.exe(s, ooc[1][0][1])
+
     # -- SKIlark's own kernel words, from Kerby's basis: not Joy's, so the
     #    reference has them as definitions; these are what they define
 
@@ -860,5 +1138,5 @@ class Joy:
 BUILTIN_NAMES = {
     "plus": "+", "minus": "-", "mul": "*", "divide": "/", "eql": "=",
     "neql": "!=", "less": "<", "leql": "<=", "greater": ">", "geql": ">=",
-    "genrecaux": "#genrecaux",
+    "genrecaux": "#genrecaux", "treerecaux": "#treerecaux", "treegenrecaux": "#treegenrecaux",
 }

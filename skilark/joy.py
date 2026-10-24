@@ -136,7 +136,9 @@ _SETS = {
     "or": (_SAME2, "dup set ", "concat", _NUMERIC + "[pop true] [[true] [false] branch] branch"),
     "xor": (_SAME2, "dup set ", "over over [not] dip concat not rollup not concat not concat",
             _NUMERIC + "!="),
-    "has": ("", "over set ", "over cons =", "[=] cons filter null not"),
+    # a list's member by =; the value goes in as [X] first, so a symbol
+    # stays a value and does not run
+    "has": ("", "over set ", "over cons =", "unit [first =] cons filter null not"),
     ">": ("", _EITHER_SET, "swap <", "over over < [pop pop false] [!=] branch"),
     ">=": ("", _EITHER_SET, "swap <=", "< not"),
 }
@@ -148,6 +150,36 @@ def _body(name: str, strings: bool = True, sets: bool = True) -> str:
         return _MAP.format(STRING=_MAP_STRING if strings else "", SET=_MAP_SET if sets else "")
     check, test, set_body, other = _SETS[name]
     return check + (f"{test}[{set_body}] [{other}] branch" if sets else other)
+
+
+#: N parameters (runtime.h TWOPARAMS ... FIVEPARAMS): words that err on a
+#: shorter stack and leave a long enough one as it was
+_PARAMS = {2: "swap swap ", 3: "rotate rotate ", 4: "[rotate rotate] dip ",
+           5: "[[rotate rotate] dip] dip "}
+
+
+def _under(n: int, prog: str) -> str:
+    """``prog`` run beneath the top ``n`` items."""
+    for _ in range(n):
+        prog = f"[{prog}] dip"
+    return prog
+
+
+def _unary_n(n: int) -> str:
+    """unary2 .. unary4: P on each of X1 .. Xn with the stack below all n
+    beneath it (unary2.c ...).  Ri is nullary of a program that drops the
+    n - 1 items above Xi (the X's after it and the results before) and the
+    i - 1 below it, then runs P; at the end the X's go."""
+    out = _QUOTE + _PARAMS[n + 1]
+    for i in range(1, n + 1):
+        drop = "pop " * (n - 1) + (_under(1, ("pop " * (i - 1)).strip()) if i > 1 else "")
+        out += f"dup [{drop.strip()}] swap cat swap [nullary] dip "
+    return out + "pop " + _under(n, ("pop " * n).strip())
+
+
+#: X [T] [E]: T on X when X is of the type, else E (if_type.h)
+def _if_type(test: str) -> str:
+    return _QUOTES[2] + f"[[dup {test}] dip] dip branch"
 
 
 #: The derived words: Joy's, as the reference implementation (Wodan58/Joy)
@@ -174,6 +206,10 @@ DEFINITIONS = {
     "rollup": "swap [swap] dip",
     "rolldown": "[swap] dip swap",
     "rotate": "swap [swap] dip swap",
+    "rollupd": "[rollup] dip",
+    "rolldownd": "[rolldown] dip",
+    "rotated": "[rotate] dip",
+    "choice": _PARAMS[3] + "rolldown [pop] [swap pop] branch",
     "id": "",
     # Kerby's combinators
     "k": "[pop] dip i",
@@ -229,6 +265,55 @@ DEFINITIONS = {
     "of": "swap at",
     "has": _body("has"),
     "in": "swap has",
+    "setsize": "64",
+    "enconcat": _SAME2 + "swapd cons concat",
+    # split, some and all (split.c, someall.h): some stops at the first
+    # member that passes, all at the first that fails
+    "split": _QUOTE + "over over filter rollup [[false] [true] branch] cat filter",
+    "some": _QUOTE + "[dup dup cat pop] dip [over null [pop pop true] [[first] dip i] branch] "
+            "[pop null not] [[rest] dip] tailrec",
+    "all": _QUOTE + "[dup dup cat pop] dip "
+           "[over null [pop pop true] [[first] dip i [false] [true] branch] branch] "
+           "[pop null] [[rest] dip] tailrec",
+    # equal.c: lists member by member, anything else by =
+    "equal": "[[pop over list over list and] "
+             "[[pop over null over null or] [pop null swap null and] "
+             "[[[uncons] dip uncons] dip [swapd] dip dup rollupd i swap [rollup] dip i and] ifte] "
+             "[pop =] ifte] y",
+    # the n-ary combinators (n_ary.h, unary2.c ..., app1.c ..., cleave.c,
+    # construct.c): P runs on the stack beneath its arguments
+    "app1": _QUOTE + _PARAMS[2] + "i",
+    "app11": _QUOTE + _PARAMS[3] + "i popd",
+    "app12": _PARAMS[4] + "unary2 rolldown pop",
+    "unary": _QUOTE + _PARAMS[2] + "nullary popd",
+    "binary": _QUOTE + _PARAMS[3] + "nullary popd popd",
+    "ternary": _QUOTE + _PARAMS[4] + "nullary popd popd popd",
+    "unary2": _unary_n(2),
+    "unary3": _unary_n(3),
+    "unary4": _unary_n(4),
+    "app2": _unary_n(2),
+    "app3": _unary_n(3),
+    "app4": _unary_n(4),
+    "cleave": _QUOTES[2] + _PARAMS[3] + "[nullary] dip [pop] swap cat nullary [popd] dip",
+    "construct": _QUOTES[2] + "swap [swap cat] cons map [i] map [] step",
+    # the type conditionals (if_type.h)
+    "ifinteger": _if_type("integer"),
+    "ifchar": _if_type("char"),
+    "iflogical": _if_type("logical"),
+    "ifset": _if_type("set"),
+    "ifstring": _if_type("string"),
+    "iflist": _if_type("list"),
+    "iffloat": _if_type("float"),
+    "iffile": _if_type("file"),
+    # cond, case and opcase (cond.c, case.c, opcase.c): a clause's first
+    # member is its test, or the value it matches; the last is the default
+    "cond": _QUOTE + "dup dup size 1 - take [first list] all [] [[] [] +] branch "
+            "[swap [small] [first popd i] [[first first popd i] [first rest popd i] "
+            "[rest swap i] ifte] ifte] y",
+    "case": _QUOTE + _PARAMS[2] + "[swap [small] [first popd i] [[first first popd =] "
+            "[first rest popd popd i] [rest swap i] ifte] ifte] y",
+    "opcase": _QUOTE + _PARAMS[2] + "[swap [small] [first popd] [[first first popd sametype] "
+              "[first rest popd] [rest swap i] ifte] ifte] y",
     # the stack as data
     "nullary": "[stack] dip infra first",
     "infra": "[[stack] dip] dip [stack] cat rolldown unit cat [cons unstack] cat [unstack] dip i",
@@ -256,6 +341,13 @@ DEFINITIONS = {
               "[swap [cons] [swap pop] branch] linrec",
     "step": _QUOTE + "[dup dup cat pop] dip [pop null] [pop pop] [[uncons] dip swap [dup [i] dip] dip swap] tailrec",
     "fold": "swapd step",
+    # the tree combinators (treestep.c, treerec.c, treegenrec.c): a list is a
+    # node, anything else a leaf; C gets a quotation that recurses
+    "treestep": _QUOTE + "[[pop pop list] [[i] cons cons step] [pop i] ifte] y",
+    "treerec": _QUOTES[2] + "cons [[pop pop list] [over [[i] cons cons] dip rest i] "
+               "[pop first i] ifte] y",
+    "treegenrec": _QUOTES[3] + "cons cons [[pop pop list] [swap dup rest first rotate "
+                  "[[i] dip] dip over [[i] cons cons] dip rest rest i] [pop first i] ifte] y",
     # programs
     "sumto": "[swap [0 =] [pop pop 0] [dup pred swap [swap i] dip +] ifte] y",
     "fact": "[swap [0 =] [pop pop 1] [dup pred swap [swap i] dip *] ifte] y",
