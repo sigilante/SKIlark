@@ -1214,6 +1214,53 @@ class Joy:
         else:
             raise Undefined("casting to a type the model does not hold")
 
+    # -- stage 10: symbols and their names (name.c, intern.c, body.c)
+
+    #: opername's names of the literal types (optable.c)
+    TYPE_NAMES = {"B": "truth value type", "C": "character type", "N": "integer type",
+                  "Z": "set type", "T": "string type", "L": "list type"}
+
+    def w_name(self, s):                # sym -> "sym"; a literal's type's name
+        self.params(s, 1)
+        v = s.pop()
+        if v[0] == "S":
+            nick = {op: c for c, op in BUILTIN_NAMES.items()}   # nickname: + is plus
+            text = nick.get(v[1], v[1]) if v[1] in self.b else v[1]
+        else:
+            text = self.TYPE_NAMES[v[0]]
+        s.append(("T", tuple(ord(c) for c in text)))
+
+    def w_intern(self, s):              # "sym" -> sym: a builtin, a definition or a new symbol
+        self.params(s, 1)
+        if s[-1][0] != "T":
+            raise JoyError("string")
+        text = "".join(chr(c) for c in s[-1][1])
+        if not text:
+            raise Undefined("intern of the empty string reads past it")
+        p = 0
+        if text[0].isspace():
+            pass
+        elif text[0].isdigit() or (text[0] == "-" and len(text) > 1 and text[1].isdigit()):
+            pass                                    # a number, not a name
+        else:
+            p = 1
+            while p < len(text) and not text[p].isspace() and text[p] not in "\"#'().;[]{}":
+                p += 1
+        if p != len(text):
+            raise JoyError("valid name")            # CHECKNAME
+        if text in ("true", "false"):
+            raise Undefined("intern of a literal's name")
+        s.pop()
+        s.append(("S", text))
+
+    def w_body(self, s):                # U -> [P], U a user definition
+        self.params(s, 1)
+        v = s[-1]
+        if v[0] != "S" or v[1] in self.b:
+            raise JoyError("user defined symbol")   # USERDEF
+        s.pop()
+        s.append(("L", tuple(literal(t) for t in self.defs.get(v[1], []))))
+
     # -- SKIlark's own kernel words, from Kerby's basis: not Joy's, so the
     #    reference has them as definitions; these are what they define
 
