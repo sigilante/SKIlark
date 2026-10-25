@@ -1,0 +1,10 @@
+(* text.joy: characters, strings, and numbers to and from text. *)
+
+'a ord .                      # a character's code
+97 chr .                      # and back
+"joy" size .
+"joy" [ord 32 -] map .        # upper case, one character at a time
+42 'd 6 0 format .            # printf's %6d
+255 'x 0 4 format .           # %.4x
+"  -17" 10 strtol .           # glibc's strtoll
+"0x1f" 0 strtol .             # base 0 reads the prefix

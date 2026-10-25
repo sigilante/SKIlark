@@ -1,0 +1,12 @@
+(* symbols.joy: words as data.  A word in a quotation is a symbol; name
+   spells it and body opens a definition. *)
+
+DEFINE
+    sq == dup * .
+
+[sq] first .
+[sq] first name .
+[+] first name .              # the reference's nickname for +
+[sq] first body .
+3 [sq] first body i .         # run a definition's body
+[sq] first typeof .           # 2: a definition of the program's own

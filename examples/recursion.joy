@@ -1,0 +1,11 @@
+(* recursion.joy: Joy's recursion combinators.  A combinator takes
+   quotations, programs as data, and runs them. *)
+
+DEFINE
+    fact == [0 =] [pop 1] [dup 1 -] [*] linrec ;      # n * (n-1)!
+    fib  == [small] [] [pred dup pred] [+] binrec ;   # fib(n-1) + fib(n-2)
+    tri  == [0] [+] primrec .                         # 1 + 2 + ... + n
+
+5 fact .
+6 fib .
+6 tri .

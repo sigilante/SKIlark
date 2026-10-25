@@ -1,0 +1,14 @@
+(* lists.joy: a quotation is a list.  map, filter and fold transform
+   one; first, rest, cons and uncons take one apart. *)
+
+DEFINE
+    sum     == 0 [+] fold ;
+    squares == [dup *] map ;
+    evens   == [2 rem 0 =] filter .
+
+[1 2 3 4] squares .
+[1 2 3 4] evens .
+[1 2 3 4] sum .
+[10 20 30] uncons .           # the rest is on top: [20 30]
+.                             # an empty term prints what stayed: 10
+[dup swap pop] 1 at .         # a word in a list is a symbol, data

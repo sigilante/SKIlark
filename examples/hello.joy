@@ -1,0 +1,6 @@
+(* hello.joy: Joy's first steps.  Each term ends with a period; after
+   each the top of the stack is printed and popped. *)
+
+2 3 + .                       # 5
+"hello, " "world" concat .    # strings concatenate
+[1 2 3] [dup *] map .         # squares
