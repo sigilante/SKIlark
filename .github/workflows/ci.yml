@@ -54,7 +54,7 @@ jobs:
           SKIJACK_REDUCER: avon
 
   # The reference: every reduction run by aviary, the reference reducer,
-  # and by Avon, and compared, the suite split over four jobs
+  # and by Avon, and compared, the suite split over six jobs
   # (SKILARK_SHARD, tests/conftest.py).  The pinned outcomes and counts
   # already hold Avon to aviary's numbers, so the reference runs on each
   # push to master and on a pull request labelled `reference`: label one
@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        shard: ["1/4", "2/4", "3/4", "4/4"]
+        shard: ["1/6", "2/6", "3/6", "4/6", "5/6", "6/6"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
