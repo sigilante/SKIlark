@@ -87,7 +87,7 @@ COMPILED = {
     "s22": (('RVal', [('quot', ('RVal', [('quot', ('RErr', None)), ('quot', ('RErr', None)), ('quot', ('RErr', None))]))]), 7_288, 7_283),
 }
 
-#: intern's programs, interpreted alone, run as one set
+#: intern's programs, interpreted alone
 INTERN = {
     "i1": '"dup" intern',
     "i2": '"zork" intern typeof',
@@ -152,12 +152,13 @@ def long_reads(monkeypatch):
     monkeypatch.setattr(skilark, "STEPS", 50_000_000)
 
 
-def test_interpreted_intern(interp_intern, long_reads):
-    """One test, so that one worker compiles the table's kernel."""
-    for name in sorted(INTERN):
-        outcome, unfuelled, fuelled = INTERN_INTERPRETED[name]
-        assert interp_intern.run("u" + name) == (outcome, unfuelled), INTERN[name]
-        assert interp_intern.run("r" + name) == (outcome, fuelled), INTERN[name]
+@pytest.mark.parametrize("name", sorted(INTERN))
+def test_interpreted_intern(interp_intern, long_reads, name):
+    """One test a program, so that shards share the runs: the table's
+    kernel compiles in seconds, and the runs take the reference minutes."""
+    outcome, unfuelled, fuelled = INTERN_INTERPRETED[name]
+    assert interp_intern.run("u" + name) == (outcome, unfuelled), INTERN[name]
+    assert interp_intern.run("r" + name) == (outcome, fuelled), INTERN[name]
 
 
 def test_the_compiled_form_refuses_intern():
@@ -200,8 +201,15 @@ def test_each_law_holds_compiled(i):
     assert left == right and left[0] == "RVal", list(LAWS)[i]
 
 
-def test_the_laws_hold_interpreted(long_reads):
-    run = interpreted(_law_programs({**LAWS, **INTERN_LAWS}))
-    for i, law in enumerate({**LAWS, **INTERN_LAWS}):
-        left, right = run.run(f"ul{i}L")[0], run.run(f"ul{i}R")[0]
-        assert left == right and left[0] == "RVal", law
+ALL_LAWS = {**LAWS, **INTERN_LAWS}
+
+
+@pytest.fixture(scope="module")
+def interp_laws():
+    return interpreted(_law_programs(ALL_LAWS))
+
+
+@pytest.mark.parametrize("i", range(len(ALL_LAWS)))
+def test_each_law_holds_interpreted(interp_laws, long_reads, i):
+    left, right = interp_laws.run(f"ul{i}L")[0], interp_laws.run(f"ul{i}R")[0]
+    assert left == right and left[0] == "RVal", list(ALL_LAWS)[i]
