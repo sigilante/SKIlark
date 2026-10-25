@@ -1013,6 +1013,37 @@ errs past the end. On Avon with templates and data jets, to normal form:
 As terms, on aviary, no pinned outcome changes; six pinned programs move
 by under 1%, and `step` is 61,918 atoms, from 61,675.
 
+*Stage 9: the pure words left (2026-10-25; `tests/test_pure.py`).* Of the
+reference's 227 builtins SKIlark had 123; of the 104 left, 12 need
+neither I/O, floats nor the interpreter's own state. Six come in here,
+each modelled in `joyref` from its C source and pinned in both forms:
+
+- `div` is `over over rem [/] dip`, `rem`'s checks first, as div.c makes
+  them.
+- `pick` takes its index among four parameters, past the stack the last
+  item and negative the top (pick.c), through `stack` and `at`.
+- `compare` is ext's `Compare` and the compiled form's `wCompare`: the
+  comparison `=` makes, as -1, 0 or 1, but with a set and a number or set
+  by their bits as a signed 64-bit integer, member 63 its sign
+  (compare.h), where `<` compares sets by subset. It costs 2,718
+  contractions interpreted whatever it compares.
+- `condnestrec` and `condlinrec` (condnestrec.c) choose the first clause
+  whose test holds on the stack as it was, else the last clause whole,
+  and run its parts with the recursion between any two: derived as the
+  parts spliced around `[clauses self i]` under `y`.
+- `casting` (casting.c) takes X's value as its num field holds it under
+  the type Y, among truth values, characters, integers and sets, which
+  share that field; the reference reinterprets other values' bytes, which
+  the model leaves undefined. A chain of `branch`es, not `cond`, keeps it
+  to 50,000 to 570,000 contractions, from 2.9 to 4.2 million.
+
+`maxint` is the reference's 2^63 - 1, which SKIlark's unary integers
+cannot hold, and stays out. `name`, `intern` and `body` (symbols and
+their names as strings) and `strtol` and `format` (numbers to and from
+text) are the next two steps. No pinned outcome elsewhere changes; 27
+programs take up to 2.8% more, and `step` is 68,549 atoms, from 61,918,
+with the signed set order.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per

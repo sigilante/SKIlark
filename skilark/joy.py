@@ -69,8 +69,9 @@ KERNEL = {
 
 #: Joy's words the interpreted kernel runs as ext's constructors, under
 #: word's ``Ext`` (``programs/kernel.ascii.ski``); the compiled form, which
-#: has no word sum, derives them (``DEFINITIONS``)
-EXT = {"size": "Size", "at": "At"}
+#: has no word sum, derives those ``DEFINITIONS`` has and runs the others
+#: as its own words (``wCompare``)
+EXT = {"size": "Size", "at": "At", "compare": "Compare"}
 
 #: a kernel symbol's Joy name, by its constructor
 NAMES = {v: k for k, v in {**KERNEL, **EXT}.items() if not v.startswith("(")}
@@ -87,12 +88,12 @@ APPLYING = ("i", "dip", "ifz", "branch", "ifte")
 
 #: the words that make or test a truth value; a compiled program carries
 #: truth values on its stack only when it uses one
-TRUTH_WORDS = {"=", "<", "branch", "ifte", "true", "false", "null", "small", "not"}
+TRUTH_WORDS = {"=", "<", "branch", "ifte", "true", "false", "null", "small", "not", "compare"}
 
 #: the words that can make a negative number; a compiled program without
 #: one of them or a negative literal computes on naturals, which give it
 #: the same answers
-SIGNED_WORDS = {"-", "/", "rem"}
+SIGNED_WORDS = {"-", "/", "rem", "compare"}
 
 #: the words that read a quotation as a list, or make one of the stack; a
 #: compiled program reads its quotations' elements, symbols among them,
@@ -147,6 +148,18 @@ _SETS = {
     ">": ("", _EITHER_SET, "swap <", "over over < [pop pop false] [!=] branch"),
     ">=": ("", _EITHER_SET, "swap <=", "< not"),
 }
+
+
+#: condnestrec's body under y, from S CS Q: the parts of the clause the
+#: tests choose, then those parts spliced around [CS Q i], run
+_CONDNEST = ("over [swap [small] [first popd] [[first first [pop pop pop] dip i] "
+             "[first rest popd] [rest swap i] ifte] ifte] y "
+             "[over over [i] cons cons] dip [[pop pop] dip] dip "
+             "uncons [[over cat] dip cat] step popd i")
+#: a set's bits as a number, and a number's as a set: casting's
+_SETNUM = "0 [1 swap [2 *] times +] fold"
+_NUMSET = ("{} swap 0 swap [0 >] [dup 2 rem [[swap over swap cons swap] dip] [] branch "
+           "2 / [1 +] dip] while pop pop")
 
 
 def _body(name: str, strings: bool = True, sets: bool = True) -> str:
@@ -319,6 +332,23 @@ DEFINITIONS = {
             "[first rest popd popd i] [rest swap i] ifte] ifte] y",
     "opcase": _QUOTE + _PARAMS[2] + "[swap [small] [first popd] [[first first popd sametype] "
               "[first rest popd] [rest swap i] ifte] ifte] y",
+    # stage 9: div (div.c), rem's checks; pick (pick.c), its index among
+    # four parameters, past the stack the last item, negative the top
+    "div": "over over rem [/] dip",
+    "pick": _PARAMS[4] + "dup integer [] [[] [] +] branch [stack] dip 0 max over size 1 - min at",
+    # condnestrec and condlinrec (condnestrec.c): the first clause whose
+    # test holds, on the stack as it was, else the last clause whole; its
+    # parts run in turn, the whole recursing between two of them, which is
+    # the parts spliced around [clauses self i]
+    "condnestrec": _QUOTE + "dup null [[] [] +] [] branch [" + _CONDNEST + "] y",
+    "condlinrec": _QUOTE + "dup null [[] [] +] [] branch [" + _CONDNEST + "] y",
+    # casting (casting.c): X's value, as the num field holds it, under the
+    # type Y, among truth values, characters, integers and sets
+    "casting": _PARAMS[2] + "dup integer [] [[] [] +] branch "
+               "[dup logical [[1] [0] branch] [dup char [ord] [dup integer [] "
+               "[dup set [" + _SETNUM + "] [[] [] +] branch] branch] branch] branch] dip "
+               "dup 4 = [pop 0 = not] [dup 5 = [pop chr] [dup 6 = [pop] "
+               "[dup 7 = [pop " + _NUMSET + "] [[] [] +] branch] branch] branch] branch",
     # the stack as data
     "nullary": "[stack] dip infra first",
     "infra": "[[stack] dip] dip [stack] cat rolldown unit cat [cons unstack] cat [unstack] dip i",
@@ -939,7 +969,9 @@ wIfte ap s = s |> {{ Empty RErr; Push a t (a |> {{ Num n RErr; Quot f (t |> {{ E
 CMPZ_NATURALS = """boolZ b = b |> {{ False Zero; True (Suc Zero) }}
 cmpZ m n = cmpN m n"""
 CMPZ_INTEGERS = """boolZ b = b |> {{ False (Pos Zero); True (Pos (Suc Zero)) }}
-cmpZ a b = a |> {{ Pos m (b |> {{ Pos n (cmpN m n); Neg n More }}); Neg m (b |> {{ Pos n Less; Neg n (cmpN n m) }}) }}"""
+cmpZ a b = a |> {{ Pos m (b |> {{ Pos n (cmpN m n); Neg n More }}); Neg m (b |> {{ Pos n Less; Neg n (cmpN n m) }}) }}
+orderZ o = o |> {{ Less (Neg Zero); Same (Pos Zero); More (Pos (Suc Zero)) }}
+wCompare s = s |> {{ Empty RErr; Push a t (t |> {{ Empty RErr; Push b u (RVal (Push (Num (orderZ (compare b a))) u)) }}) }}"""
 
 
 #: a compiled program's list words, present only in a program that reads a
@@ -1024,12 +1056,20 @@ compl s = complS Zero n64 s
 {BITSI}
 boolS b = b |> {{ False SNil; True (SCons Zero SNil) }}
 isSet x = x |> {{ Num n False; Quot q False; Logical b False; Sym y False{ISTX}; Set z True }}
+numOrSet x = x |> {{ Num n True; Quot q False; Logical b True; Sym y False{NSTX}; Set z True }}
 bitsOf x = x |> {{ Num n (bitsI n); Quot q SNil; Logical b (boolS b); Sym y SNil{BITSTX}; Set z z }}
 -- a set and a number are the same when the number's 64 bits, two's
 -- complement, are the set's members; < is the proper subset of the bits
 -- when either is a set (comprel.h SETCMP)
 setC x y = eqS (bitsOf x) (bitsOf y) |> {{ True Same; False More }}
 lessI x y = (isSet x |> {{ True True; False (isSet y) }}) |> {{ True (both (negate (eqS (bitsOf x) (bitsOf y))) (subS (bitsOf x) (bitsOf y))); False (isLess (compare x y)) }}
+-- compare's order with sets: a set and a number or set by their bits as a
+-- signed 64-bit integer, whose sign is member 63 (compare.h)
+cmpO x y = both (isSet x |> {{ True True; False (isSet y) }}) (both (numOrSet x) (numOrSet y)) |> {{ True (sgnS (revS (bitsOf x) SNil) (revS (bitsOf y) SNil)); False (compare x y) }}
+revS z a = z |> {{ SNil a; SCons m r (revS r (SCons m a)) }}
+top63 r = r |> {{ SNil False; SCons m t (eqN m (mul eight eight |> {{ Zero Zero; Suc j j }})) }}
+sgnS a b = top63 a |> {{ True (top63 b |> {{ True (lexS a b); False Less }}); False (top63 b |> {{ True More; False (lexS a b) }}) }}
+lexS a b = a |> {{ SNil (b |> {{ SNil Same; SCons y t Less }}); SCons x r (b |> {{ SNil More; SCons y t (cmpN x y |> {{ Less Less; Same (lexS r t); More More }}) }}) }}
 {SETCONS}
 wSet z s = RVal (Push (Set z) s)
 """
@@ -1193,6 +1233,7 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
             BITSI=("bitsI z = z |> { Pos m (bitsN Zero m); Neg m (compl (bitsN Zero m)) }"
                    if signs else "bitsI m = bitsN Zero m"),
             ISTX="; Char c False; Str z False" if text else "",
+            NSTX="; Char c True; Str z False" if text else "",
             BITSTX="; Char c (bitsI c); Str z SNil" if text else "",
             SETCONS=("setCons n z u = n |> { Pos m (ltN m n64 |> { True (RVal (Push (Set (insS m z)) u)); "
                      "False RErr }); Neg m RErr }" if signs else
@@ -1300,6 +1341,9 @@ def _set_line(line: str, text: bool, signs: bool) -> str:
     if line.startswith("wLt s = "):
         assert line.count("(isLess (compare b a))") == 1
         return line.replace("(isLess (compare b a))", "(lessI b a)")
+    if line.startswith("wCompare s = "):
+        assert line.count("(orderZ (compare b a))") == 1
+        return line.replace("(orderZ (compare b a))", "(orderZ (cmpO b a))")
     if line.startswith("wUncons s = "):
         return _set_branch(line, f"; Set z (z |> {{ SNil RErr; SCons m r (RVal (Push (Set r) (Push (Num {m}) t))) }})",
                            " }) }")
@@ -1371,7 +1415,7 @@ class _Compiler:
                 self.syms[ctor] = (t.name, "")
                 self.syms[ctor] = (t.name, f"{ctor} ({self.body(t.body, 'ap')})")
             return f"(Sym {ctor})"
-        ctor = "Y" + ("Ifz" if t == "ifz" else KERNEL[t])
+        ctor = "Y" + ("Ifz" if t == "ifz" else {**KERNEL, **EXT}[t])
         self.syms.setdefault(ctor, (t, f"{ctor} {self.word(t, 'ap')}"))
         return f"(Sym {ctor})"
 
@@ -1435,6 +1479,8 @@ class _Compiler:
             return f"(w{KERNEL[t]} {ap})"
         if t in KERNEL:
             return f"w{KERNEL[t]}"
+        if t in EXT:                    # one DEFINITIONS lacks: the compiled form's own
+            return f"w{EXT[t]}"
         if t in keep:
             return f"?^/{t}"
         raise ValueError(f"no compiled form for {t!r}")
