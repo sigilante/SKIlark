@@ -33,6 +33,8 @@ PROGRAMS = {
     "s18": '[tuck] first body size',
     "s19": '[compare] first name "compare" =',
     "s20": '[-] first name size',
+    "s21": '[>] first',
+    "s22": '[[>] [!=]] [dup] infra',
 }
 
 INTERPRETED = {
@@ -56,6 +58,8 @@ INTERPRETED = {
     "s18": (('RVal', [3]), 5_486, 5_482),
     "s19": (('RVal', [True]), 5_465, 5_453),
     "s20": (('RVal', [5]), 4_984, 4_980),
+    "s21": (('RVal', [('Sym', '>')]), 2_633, 2_642),
+    "s22": (('RVal', [[('Quote', [('Def', '>')]), ('Quote', [('Def', '>')]), ('Quote', [('Def', '!=')])]]), 28_835, 28_334),
 }
 
 COMPILED = {
@@ -79,6 +83,8 @@ COMPILED = {
     "s18": (('RVal', [3]), 20_375, 20_041),
     "s19": (('RVal', [True]), 517, 517),
     "s20": (('RVal', [5]), 30_164, 29_457),
+    "s21": (('RVal', [('Sym', '>')]), 278, 278),
+    "s22": (('RVal', [('quot', ('RVal', [('quot', ('RErr', None)), ('quot', ('RErr', None)), ('quot', ('RErr', None))]))]), 7_288, 7_283),
 }
 
 #: intern's programs, interpreted alone, run as one set

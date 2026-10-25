@@ -292,7 +292,9 @@ DEFINITIONS = {
     "enconcat": _SAME2 + "swapd cons concat",
     # split, some and all (split.c, someall.h): some stops at the first
     # member that passes, all at the first that fails
-    "split": _QUOTE + "over over filter rollup [[false] [true] branch] cat filter",
+    # split: each filter on the stack under the list, as split.c runs B, so
+    # a test that reads below its element (a pivot, say) sees what it should
+    "split": _QUOTE + "[filter] nullary [[[false] [true] branch] cat filter] dip swap",
     "some": _QUOTE + "[dup dup cat pop] dip [over null [pop pop true] [[first] dip i] branch] "
             "[pop null not] [[rest] dip] tailrec",
     "all": _QUOTE + "[dup dup cat pop] dip "

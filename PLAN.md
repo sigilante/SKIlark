@@ -1103,6 +1103,16 @@ not read back, since an interpreted string is read a probe a character.
 No pinned outcome elsewhere changes; 67 programs take up to 5.7% more,
 and `step` is 75,650 atoms, from 73,692.
 
+Two fixes came with it, found running whole programs. `split` ran its
+filters with its own copies of the list and the test under each element,
+so a test that read below the element, as quicksort's `[>]` reads its
+pivot, compared against those: `1 [2] [>] split` put 2 in the true part
+(stage 7's pins tested no such program). Each filter now runs on the
+stack under the list, the first by `nullary` and the second under `dip`,
+and `[3 1 2]` quicksorts to `[1 2 3]` (`b86`, `b87`). And stage 10's new
+name code was not yet the reader's: an operator-named derived word, `>`,
+read back as `'\x1d'` (`s21`, `s22`).
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per
