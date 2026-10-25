@@ -145,6 +145,7 @@ half from one run to the next.
 | #15, a linear abstraction, xdist, Avon | 58m (reference) | 16m | 11m | 12m | 9m |
 | #16, the reference in four shards | 9–15m (and slow, 3m) | 14m | 11m | 12m | 10m |
 | #18, stage 7 and the numbers | 34–43m (and slow, 3m) | 23m | 16m | 15m | 15m |
+| #26, stages 9 to 11 | 45–74m (and slow, 3m) | 30m | 22m | 22m | 22m |
 
 Two changes cut CI from hours to a quarter of an hour:
 
@@ -237,6 +238,6 @@ As terms, on aviary, six pinned programs move by under 1% and `step` is
   interpreted word a few percent.
 - *SKIjack's nesting:* programs past 240 levels spill into equations;
   the deepest pinned program nests 174.
-- *CI:* the Python jobs take 15 to 23 minutes and the reference shards
-  34 to 43, against GitHub's six-hour stop; a fifth shard is the next
-  lever when the shards pass an hour.
+- *CI:* the Python jobs take 20 to 35 minutes. Stages 9 to 11 brought
+  the reference's four shards to 45 to 74 minutes, so it runs in six;
+  it runs only on master and on a pull request labelled `reference`.
