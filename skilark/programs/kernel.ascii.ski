@@ -32,7 +32,7 @@ named   === Named text prog | User text prog
 -- Avon jets a constructor of at most 32 arguments, and a one-field
 -- constructor of an n-way sum takes n + 1, so word keeps to 31: the
 -- kernel's further words are ext's, a sum of their own under one of word's
-ext     === Size | At
+ext     === Size | At | Compare
 word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | Sub | Mul | Div | Rem | Eql | Lt | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Ord | Chr | Typeof | Not | Choose stack | Ext ext
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
@@ -188,7 +188,7 @@ cSlash := Neg n15
 cLt := Neg n2
 cEq := Neg n1
 cGt := Neg Zero
-nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Not (TCons cn (TCons co (TCons ct TNil))); Choose v TNil; Ext e (e |> { Size (TCons cs (TCons ci (TCons cz (TCons ce TNil)))); At (TCons ca (TCons ct TNil)) }) }
+nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Not (TCons cn (TCons co (TCons ct TNil))); Choose v TNil; Ext e (e |> { Size (TCons cs (TCons ci (TCons cz (TCons ce TNil)))); At (TCons ca (TCons ct TNil)); Compare (TCons cc (TCons co (TCons cm (TCons cp (TCons ca (TCons cr (TCons ce TNil))))))) }) }
 
 -- Joy's typeof (globals.h): a user-defined symbol 2, any other 3, a truth
 -- value 4, a character 5, an integer 6, a set 7, a string 8, a list 9
@@ -249,15 +249,26 @@ steps cmp ex w q s = w |> {
   Typeof  (s |> { Empty RErr; Push a t (ex q (Push (Num (kindOf a)) t)) });
   Not     (s |> { Empty RErr; Push a t (a |> { Num n (ex q (Push (Logical (zero n)) t)); Quot r RErr; Logical b (ex q (Push (Logical (flip b)) t)); Sym y RErr; Char c (ex q (Push (Logical (zero c)) t)); Str xs RErr; Set z (ex q (Push (Set (compl z)) t)) }) });
   Choose w (s |> { Empty RErr; Push a t (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (truth a |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr; Set st RErr }) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr; Set st RErr }) }) });
-  Ext e   (exts e ex q s) }
+  Ext e   (exts cmp e ex q s) }
 
--- ext's words, on skijack's list operations, which a runtime may run
--- natively on lists it holds whole (avon DESIGN §6.14).  size counts an
--- aggregate's members; at takes an index, an integer or a truth value, and
--- the member there, its first at 0, and errs past the end
-exts e ex q s = e |> {
+-- ext's words: size and at on skijack's list operations, which a runtime
+-- may run natively on lists it holds whole (avon DESIGN §6.14).  size
+-- counts an aggregate's members; at takes an index, an integer or a truth
+-- value, and the member there, its first at 0, and errs past the end;
+-- compare is the comparison = and < make, as -1, 0 or 1
+exts cmp e ex q s = e |> {
+  Compare (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push (Num (orderZ (cmpO cmp b a))) u)) }) });
   Size (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (Push (Num (Pos (listLength r))) t)); Logical b RErr; Sym y RErr; Char c RErr; Str z (ex q (Push (Num (Pos (listLength z))) t)); Set z (ex q (Push (Num (Pos (listLength z))) t)) }) });
   At   (s |> { Empty RErr; Push i t (index i |> { Neg k RErr; Pos m (t |> { Empty RErr; Push a u (a |> { Num n RErr; Quot r (less m (listLength r) |> { False RErr; True (ex q (Push (itemOf (listAt r m Dup)) u)) }); Logical b RErr; Sym y RErr; Char c RErr; Str z (less m (listLength z) |> { False RErr; True (ex q (Push (Char (listAt z m (Pos Zero))) u)) }); Set z (less m (listLength z) |> { False RErr; True (ex q (Push (Num (Pos (listAt z m Zero))) u)) }) }) }) }) }) }
+orderZ o = o |> { Less (Neg Zero); Same (Pos Zero); More (Pos n1) }
+-- compare's order: cmp's, but a set and a number or set by their bits as
+-- a signed 64-bit integer (compare.h), whose sign is member 63
+cmpO cmp x y = both (isSet x |> { True True; False (isSet y) }) (both (numOrSet x) (numOrSet y)) |> { True (sgnS (revS (bitsOfI x) SNil) (revS (bitsOfI y) SNil)); False (cmp x y) }
+numOrSet x = x |> { Num z True; Quot r False; Logical b True; Sym w False; Char c True; Str z False; Set z True }
+revS z a = z |> { SNil a; SCons m r (revS r (SCons m a)) }
+top63 r = r |> { SNil False; SCons m t (same m (Suc n62)) }
+sgnS a b = top63 a |> { True (top63 b |> { True (lexS a b); False Less }); False (top63 b |> { True More; False (lexS a b) }) }
+lexS a b = a |> { SNil (b |> { SNil Same; SCons y t Less }); SCons x r (b |> { SNil More; SCons y t (cmpN x y |> { Less Less; Same (lexS r t); More More }) }) }
 -- an index as an integer, and anything else as a negative one, which no
 -- member has
 index i = i |> { Num z z; Quot r (Neg Zero); Logical b (boolZ b); Sym y (Neg Zero); Char c (Neg Zero); Str z (Neg Zero); Set z (Neg Zero) }

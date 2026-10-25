@@ -1123,6 +1123,97 @@ class Joy:
         else:
             ooc = s.pop(); self.exe(s, ooc[1][0][1])
 
+    # -- stage 9: the pure words the earlier stages left
+
+    def w_div(self, s):                 # div.c: I J -> K L, rem's checks
+        self.params(s, 2)
+        if s[-1][0] != "N" or s[-2][0] != "N":
+            raise JoyError("two integers")
+        if s[-1][1] == 0:                           # CHECKZERO
+            raise JoyError("non-zero operand")
+        b = s.pop(); a = s.pop()
+        s.append(("N", int64(c_div(a[1], b[1])))); s.append(("N", c_rem(a[1], b[1])))
+
+    def w_pick(self, s):                # pick.c: X .. n -> X .. Xn, the last if n is past it
+        self.params(s, 4)                           # FOURPARAMS, the index among them
+        if s[-1][0] != "N":
+            raise JoyError("integer")
+        n = s.pop()[1]
+        k = 0
+        while k < n and k + 1 < len(s):             # a negative n picks the top
+            k += 1
+        s.append(s[-1 - k])
+
+    def w_compare(self, s):             # compare.c: COMPREL2 with +, Compare itself
+        self.params(s, 2)
+        b = s.pop(); a = s.pop(); s.append(("N", compare(a, b)))
+
+    def condnest(self, s, cs) -> None:
+        """condnestrecaux: each clause's B on the saved stack, the first
+        true one's parts (or all of the last clause's) run in turn, the
+        whole recursing between any two."""
+        saved = list(s)
+        for c in cs:
+            if c[0] != "L" or not c[1] or any(p[0] != "L" for p in c[1]):
+                raise Undefined("a cond clause that is not a list of quotations")
+        chosen = cs[-1][1]
+        for c in cs[:-1]:
+            s[:] = list(saved)
+            self.exe(s, c[1][0][1])
+            if not s:
+                raise Undefined("a test that leaves no value")
+            if truth(s[-1]):
+                chosen = c[1][1:]
+                break
+        s[:] = list(saved)
+        if not chosen:
+            raise Undefined("a cond clause with no part to run")
+        self.exe(s, chosen[0][1])
+        for part in chosen[1:]:
+            self.condnest(s, cs)
+            self.exe(s, part[1])
+
+    def w_condnestrec(self, s):         # condnestrec.c: [ [C1] [C2] .. [D] ]
+        self.params(s, 1)
+        if s[-1][0] != "L":
+            raise JoyError("list")
+        cs = s.pop()[1]
+        if not cs:
+            raise JoyError("non-empty list")
+        self.condnest(s, cs)
+
+    def w_condlinrec(self, s):          # condlinrec.c: condnestrec's aux
+        self.w_condnestrec(s)
+
+    def w_casting(self, s):             # casting.c: X's value as type Y
+        """The node's value under Y's type: defined here where both are a
+        truth value, a character, an integer or a set, which share the
+        num field; a truth value only from 0 or 1, a set only from
+        members the model's sets hold."""
+        self.params(s, 2)
+        y = s.pop()
+        if y[0] != "N":
+            raise Undefined("casting to a type that is not an integer")
+        x = s.pop()
+        if x[0] == "B":
+            v = int(x[1])
+        elif x[0] in ("C", "N"):
+            v = x[1]
+        elif x[0] == "Z":
+            v = signed(x[1])
+        else:
+            raise Undefined("casting a value with no num field")
+        if y[1] == 4 and v in (0, 1):
+            s.append(("B", v == 1))
+        elif y[1] == 5:
+            s.append(("C", v))
+        elif y[1] == 6:
+            s.append(("N", v))
+        elif y[1] == 7 and v >= 0 and v <= MASK:
+            s.append(("Z", v))
+        else:
+            raise Undefined("casting to a type the model does not hold")
+
     # -- SKIlark's own kernel words, from Kerby's basis: not Joy's, so the
     #    reference has them as definitions; these are what they define
 
