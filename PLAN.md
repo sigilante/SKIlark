@@ -1113,6 +1113,25 @@ and `[3 1 2]` quicksorts to `[1 2 3]` (`b86`, `b87`). And stage 10's new
 name code was not yet the reader's: an operator-named derived word, `>`,
 read back as `'\x1d'` (`s21`, `s22`).
 
+*Stage 12: Joy files and examples (2026-10-25; `tests/test_examples.py`).*
+`skilark.joyfile` reads the reference's file syntax and runs a file as
+main.c does, each term on the stack the terms before it left and the top
+written and popped after each (print.c, write.c); `python -m skilark
+FILE.joy` runs one. `examples/` holds ten whole programs, each beside the
+reference's output, which the model checks in every job and SKIlark, in
+the slow job, on Avon. The k-th line comes from the first k terms as one
+program: one program for the whole file, its stack a list each term runs
+on by `infra`, is linear under sharing but exponential in copy mode,
+which computes that list again wherever a term looks at it. Running the
+examples found `split`'s and the reader's bugs (stage 11).
+
+*Stage 13: the SKI underneath (2026-10-25; `tests/test_ski.py`).* `--ski`
+shows a program, or a file's last line, as the closed S, K, I term it
+runs as, its size as a tree and shared, and what it reduces to;
+`--ski-out` writes it as Avon's SKIT or skijack's shared form, and Avon
+reduces either in the contractions SKIjack's reducer counts. `1 2 +` is
+644 atoms compiled and 75,000 interpreted, the kernel's `step` with it.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per

@@ -117,6 +117,21 @@ printed after each:
 python -m skilark examples/qsort.joy        # [1 2 3]  and  []
 ```
 
+**The SKI underneath.** `--ski` shows a program as the closed term over
+S, K and I alone that it runs as, with its size and what it reduces to,
+and `--ski-out FILE.skit` (or `.dag`, shared) writes it for Avon:
+
+```sh
+python -m skilark --ski --form compiled "1 2 +"
+# compiled: 644 atoms as a tree, 386 nodes shared
+# K (S (S (K S) ...
+# reduces in 227 contractions to 3
+python -m skilark --ski-out p.skit --form compiled "1 2 +" && avon reduce --whnf p.skit
+```
+
+An interpreted program carries the kernel's `step`, about 75,000 atoms;
+the compiled form carries only the words it uses.
+
 `skilark.joyfile` reads the reference's file syntax, `(* *)` and `#`
 comments, `DEFINE` blocks and terms ended by `.`; `tests/test_examples.py`
 checks every example against the model and, in the slow job, SKIlark
