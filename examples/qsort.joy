@@ -1,0 +1,9 @@
+(* qsort.joy: quicksort by binrec, the reference's own idiom.  split
+   divides the rest of the list by the pivot; enconcat joins the halves
+   around it. *)
+
+DEFINE
+    qsort == [small] [] [uncons [>] split] [enconcat] binrec .
+
+[3 1 2] qsort .
+[] qsort .

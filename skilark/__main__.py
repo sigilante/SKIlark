@@ -1,6 +1,8 @@
 """``python -m skilark "3 [dup +] i"``: run a Joy program in the
 interpreted and the compiled form and print each outcome with its host
-contraction count.  ``--define "sq == dup +"`` adds a definition.
+contraction count.  ``python -m skilark FILE.joy`` runs a Joy file as the
+reference does, printing the top of the stack after each term
+(``skilark.joyfile``).  ``--define "sq == dup +"`` adds a definition.
 ``--reducer avon`` runs the reductions in Avon, the C runtime, and
 ``--reducer check`` in both, compared; either needs ``AVON``, the path of
 an ``avon`` binary (skijack's ``SKIJACK_REDUCER``)."""
@@ -20,7 +22,7 @@ from . import compiled, interpreted, joy
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="skilark",
                                  description="run a Joy program on SKIjack")
-    ap.add_argument("program", help='Joy text, e.g. "1 2 + dup +"')
+    ap.add_argument("program", help='Joy text, e.g. "1 2 + dup +", or a .joy file')
     ap.add_argument("--define", action="append", default=[], metavar="DEF",
                     help='a definition, "name == body"; may repeat')
     ap.add_argument("--form", choices=["interpreted", "compiled", "both"],
@@ -35,6 +37,17 @@ def main(argv=None) -> int:
                      "the Avon reducer")
         os.environ["SKIJACK_REDUCER"] = args.reducer
     defs = dict(joy.DEFINITIONS, **joy.parse_definitions("\n".join(args.define)))
+    if args.program.endswith(".joy") and os.path.isfile(args.program):
+        from .joyfile import JoyFileError, run_file
+        with open(args.program, encoding="utf-8") as f:
+            text = f.read()
+        try:
+            for line in run_file(text, "compiled" if args.form == "compiled" else "interpreted"):
+                print(line)
+        except (JoyFileError, SkijackError, ValueError) as ex:
+            print(f"skilark: {args.program}: {ex}", file=sys.stderr)
+            return 1
+        return 0
     forms = ["interpreted", "compiled"] if args.form == "both" else [args.form]
     try:
         return _run(forms, args.program, defs)

@@ -1,0 +1,7 @@
+(* intern.joy: intern reads a word back from its name, so a program can
+   look up and run a word it builds as text.  The interpreted form's. *)
+
+DEFINE
+    sq == dup * .
+
+3 "sq" intern unit i .

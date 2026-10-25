@@ -105,6 +105,23 @@ SKIlark requires 0.2.3. CI runs the suite on Avon on each Python. On each
 push to master, and on a pull request labelled `reference`, it also runs the
 suite with every reduction checked against aviary (`SKIJACK_REDUCER=check`).
 
+**Examples.** `examples/` holds whole Joy programs, each beside the
+output the reference prints (`NAME.out`): `hello`, `recursion`
+(`linrec`, `binrec`, `primrec`), `lists`, `qsort`, `gcd` (`tailrec`,
+`while`), `control` (`cond`, `times`), `text` (`format`, `strtol`),
+`sets`, `symbols` (`name`, `body`) and `intern`. Run one as the reference
+runs a file, each term on the stack the terms before it left and the top
+printed after each:
+
+```sh
+python -m skilark examples/qsort.joy        # [1 2 3]  and  []
+```
+
+`skilark.joyfile` reads the reference's file syntax, `(* *)` and `#`
+comments, `DEFINE` blocks and terms ended by `.`; `tests/test_examples.py`
+checks every example against the model and, in the slow job, SKIlark
+against both.
+
 ```python
 >>> from skilark import Joy, compiled
 >>> Joy().run("r7")                                   # 3 sumto, by Kerby's y

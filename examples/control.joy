@@ -1,0 +1,11 @@
+(* control.joy: choosing and repeating. *)
+
+DEFINE
+    classify == [[[0 <] "negative"] [[0 =] "zero"] ["positive"]] cond popd ;
+    countdown == [0 >] [dup 1 -] while .
+
+-5 classify .
+9 classify .
+3 countdown stack .           # the countdown, as a list
+[] unstack .                  # clear the stack: nothing to print
+1 5 [2 *] times .             # 2 to the 5th

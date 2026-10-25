@@ -295,6 +295,27 @@ class Joy:
             return ("RErr", None)
         return ("RVal", s)
 
+    def run_file(self, text: str) -> List[str]:
+        """A Joy file, as main.c runs it: each term on the stack the terms
+        before it left, then print.c's autoput 1, the top written and
+        popped; ``run time error`` where a term errs."""
+        from skilark import joyfile
+        lines: List[str] = []
+        s: Stack = []
+        for kind, item in joyfile.read(text):
+            if kind == "define":
+                self.defs.update({k: parse(v) for k, v in item.items()})
+                continue
+            try:
+                self.exe(s, [literal(t) if not isinstance(t, str) or t in ("true", "false")
+                             else ("S", t) for t in parse(item)])
+            except JoyError:
+                lines.append("run time error")
+                continue
+            if s:
+                lines.append(joyfile.write(s.pop()))
+        return lines
+
     def exe(self, s: Stack, prog) -> None:
         """``exeterm``: push each literal, run each symbol."""
         for v in prog:

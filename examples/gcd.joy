@@ -1,0 +1,9 @@
+(* gcd.joy: Euclid's algorithm with tailrec, and with while. *)
+
+DEFINE
+    gcd  == [0 =] [pop] [dup rollup rem] tailrec ;
+    gcd2 == [0 >] [dup rollup rem] while pop .
+
+48 18 gcd .
+17 5 gcd .
+48 18 gcd2 .
