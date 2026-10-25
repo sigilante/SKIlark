@@ -1075,6 +1075,34 @@ form's `name` and `body` read the program's own symbols, `body` a static
 quotation of each user definition it quotes. No pinned outcome elsewhere
 changes; 47 programs take up to 4.5% more.
 
+*Stage 11: numbers to and from text (2026-10-25; `tests/test_numtext.py`).*
+`strtol` and `format` are ext's `Strtol` and `Format` in both forms, on
+`programs/numtext.ascii.ski`, which a program set carries only when it
+uses one, written in skijack's numeral and list operations so that one
+text serves both forms:
+
+- `strtol` (strtol.c) reads as glibc's `strtoll(s, 0, b)`: spaces, a
+  sign, base 0 reading `0x` and a hex digit as 16 and a leading 0 as 8,
+  the digits to the first that is not one; a base past 36, 1 or negative
+  gives 0.
+- `format` (format.c) writes printf's `%*.*lld` with its conversion
+  among `d i o x X`: a negative width left-justifies, a negative
+  precision is 1, and 0 at precision 0 has no digits. A negative number
+  under `o`, `x` or `X` is its 64 bits, which the model leaves undefined.
+
+Derived in Joy first, they were too dear: each walks strings with list
+words, which turns on the compiled form's list views, so one compiled
+program took 40 seconds to compile into an 84-million-atom term, and
+`"12" 10 strtol` 724,264 contractions; as kernel words, 0.3 seconds and
+235. The core is written for a reducer that shares nothing, as the
+tests' copy mode is: a value used twice is computed twice, so each text
+is read once in one pass, the base and the digit table are cased to
+literals before use, and the digits carry their count forward. A
+format's result is pinned by comparison with the reference's string,
+not read back, since an interpreted string is read a probe a character.
+No pinned outcome elsewhere changes; 67 programs take up to 5.7% more,
+and `step` is 75,650 atoms, from 73,692.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per
