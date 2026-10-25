@@ -19,6 +19,7 @@ import test_sets as Z
 import test_library as B
 import test_pure as P
 import test_symbols as N
+import test_numtext as X
 import test_words as W
 from skilark import compiled, interpreted
 
@@ -32,6 +33,7 @@ PINNED = ([("words", n, p) for n, p in W.PROGRAMS.items()]
           + [("pure", n, p) for n, p in P.PROGRAMS.items()]
           + [("symbols", n, p) for n, p in N.PROGRAMS.items()]
           + [("intern", n, p) for n, p in N.INTERN.items()]
+          + [("numtext", n, p) for n, p in X.PROGRAMS.items()]
           + [("modes", n, p) for n, p in M.PROGRAMS.items()])
 TABLES = {"words": (W.INTERPRETED, W.COMPILED),
           "combinators": (C.INTERPRETED, C.COMPILED),
@@ -42,6 +44,7 @@ TABLES = {"words": (W.INTERPRETED, W.COMPILED),
           "pure": (P.INTERPRETED, P.COMPILED),
           "symbols": (N.INTERPRETED, N.COMPILED),
           "intern": (N.INTERN_INTERPRETED, None),       # the interpreted form's alone
+          "numtext": (X.INTERPRETED, X.COMPILED),
           "modes": (M.INTERPRETED, M.COMPILED)}
 
 

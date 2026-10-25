@@ -223,6 +223,52 @@ def c_rem(a: int, b: int) -> int:
     return a - b * c_div(a, b)
 
 
+def c_strtoll(text: str, base: int) -> int:
+    """glibc's strtoll(text, 0, base): spaces, a sign, base 0 reading 0x as
+    16 and 0 as 8, the digits up to the first that is not one; an invalid
+    base gives 0."""
+    if base < 0 or base == 1 or base > 36:
+        return 0
+    i = 0
+    while i < len(text) and text[i] in " \t\n\v\f\r":
+        i += 1
+    neg = False
+    if i < len(text) and text[i] in "+-":
+        neg = text[i] == "-"; i += 1
+
+    def digit(c: str) -> int:
+        return int(c, 36) if c.isascii() and c.isalnum() else 99
+    hexed = (i + 2 < len(text) and text[i] == "0" and text[i + 1] in "xX"
+             and digit(text[i + 2]) < 16)
+    if base == 0:
+        base = 16 if hexed else 8 if i < len(text) and text[i] == "0" else 10
+        i += 2 if hexed else 0
+    elif base == 16 and hexed:
+        i += 2
+    v = 0
+    while i < len(text) and digit(text[i]) < base:
+        v = v * base + digit(text[i]); i += 1
+    return -v if neg else v
+
+
+def c_format(n: int, spec: str, width: int, prec: int) -> str:
+    """printf's "%*.*lld" with spec in place of d: a negative width
+    left-justifies, a negative precision is none; 0 at precision 0 has no
+    digits.  A negative number under o, x or X is its 64 bits, which the
+    model does not follow."""
+    if n < 0 and spec in "oxX":
+        raise Undefined("a negative number formatted unsigned")
+    base = {"d": 10, "i": 10, "o": 8, "x": 16, "X": 16}[spec]
+    digits, m = "", abs(n)
+    while m:
+        digits = "0123456789abcdef"[m % base] + digits; m //= base
+    if spec == "X":
+        digits = digits.upper()
+    digits = digits.rjust(1 if prec < 0 else prec, "0")
+    body = ("-" if n < 0 else "") + digits
+    return body.ljust(-width) if width < 0 else body.rjust(width)
+
+
 # ------------------------------------------------------------- the machine
 
 class Joy:
@@ -1260,6 +1306,38 @@ class Joy:
             raise JoyError("user defined symbol")   # USERDEF
         s.pop()
         s.append(("L", tuple(literal(t) for t in self.defs.get(v[1], []))))
+
+    # -- stage 11: numbers to and from text (strtol.c, format.c)
+
+    def w_strtol(self, s):              # S I -> J: strtoll(S, 0, I)
+        self.params(s, 2)
+        if s[-1][0] != "N":
+            raise JoyError("integer")
+        base = s[-1][1]
+        if s[-2][0] != "T":
+            raise JoyError("string")
+        base = s.pop()[1]
+        text = "".join(chr(c) for c in s.pop()[1])
+        s.append(("N", int64(c_strtoll(text, base))))
+
+    def w_format(self, s):              # N C I J -> S: snprintf "%*.*lld", C the conversion
+        self.params(s, 4)
+        if s[-1][0] != "N" or s[-2][0] != "N":
+            raise JoyError("two integers")
+        prec = s.pop()[1]; width = s.pop()[1]
+        if s[-1][0] != "C":
+            raise JoyError("character")
+        spec = s[-1][1]
+        if spec == 0:
+            raise Undefined("format's conversion NUL ends the format string")
+        if chr(spec) not in "dioxX":
+            raise JoyError("one of: d i o x X")
+        s.pop()
+        if s[-1][0] not in ("N", "C", "B"):
+            raise JoyError("numeric")
+        v = s.pop()
+        n = int(v[1]) if v[0] == "B" else v[1]
+        s.append(("T", tuple(ord(c) for c in c_format(n, chr(spec), width, prec))))
 
     # -- SKIlark's own kernel words, from Kerby's basis: not Joy's, so the
     #    reference has them as definitions; these are what they define

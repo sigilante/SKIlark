@@ -72,7 +72,7 @@ KERNEL = {
 #: has no word sum, derives those ``DEFINITIONS`` has and runs the others
 #: as its own words (``wCompare``)
 EXT = {"size": "Size", "at": "At", "compare": "Compare", "name": "Name", "body": "Body",
-       "intern": "Intern"}
+       "intern": "Intern", "strtol": "Strtol", "format": "Format"}
 
 #: the words only the interpreted form has: intern needs every Joy word's
 #: name at run time, and the compiled form's symbols are the program's own
@@ -98,7 +98,7 @@ TRUTH_WORDS = {"=", "<", "branch", "ifte", "true", "false", "null", "small", "no
 #: the words that can make a negative number; a compiled program without
 #: one of them or a negative literal computes on naturals, which give it
 #: the same answers
-SIGNED_WORDS = {"-", "/", "rem", "compare"}
+SIGNED_WORDS = {"-", "/", "rem", "compare", "strtol", "format"}
 
 #: the words that read a quotation as a list, or make one of the stack; a
 #: compiled program reads its quotations' elements, symbols among them,
@@ -292,7 +292,9 @@ DEFINITIONS = {
     "enconcat": _SAME2 + "swapd cons concat",
     # split, some and all (split.c, someall.h): some stops at the first
     # member that passes, all at the first that fails
-    "split": _QUOTE + "over over filter rollup [[false] [true] branch] cat filter",
+    # split: each filter on the stack under the list, as split.c runs B, so
+    # a test that reads below its element (a pivot, say) sees what it should
+    "split": _QUOTE + "[filter] nullary [[[false] [true] branch] cat filter] dip swap",
     "some": _QUOTE + "[dup dup cat pop] dip [over null [pop pop true] [[first] dip i] branch] "
             "[pop null not] [[rest] dip] tailrec",
     "all": _QUOTE + "[dup dup cat pop] dip "
@@ -645,7 +647,7 @@ def _uses_lists(progs: Iterable[Program]) -> bool:
 
 #: the words that make a character; with a character or a string literal,
 #: a compiled program has characters and strings only when it uses one
-TEXT_WORDS = {"chr", "ord", "name"}
+TEXT_WORDS = {"chr", "ord", "name", "strtol", "format"}
 
 
 def _uses_text(progs: Iterable[Program]) -> bool:
@@ -818,6 +820,42 @@ def datum(prog: Program, basis: bool = False) -> str:
     return f"cat ?^/{t} ({rest})"
 
 
+#: strtol's and format's words over the interpreted kernel's items: their
+#: checks as strtol.c and format.c make them, then programs/numtext's core
+_NUMTEXT_INTERPRETED = """
+strtolP ex q t a = a |> { Num b (t |> { Empty RErr; Push x u (x |> { Num n RErr; Quot r RErr; Logical l RErr; Sym w RErr; Char c RErr; Str z (ex q (Push (Num (strtolF z b)) u)); Set z RErr }) }); Quot r RErr; Logical l RErr; Sym w RErr; Char c RErr; Str z RErr; Set z RErr }
+formatP ex q t a = a |> { Num j (t |> { Empty RErr; Push i u (i |> { Num w (u |> { Empty RErr; Push c v (c |> { Num n RErr; Quot r RErr; Logical l RErr; Sym y RErr; Char k (specOK (codeOf k) (v |> { Empty RErr; Push x y (fmtPush ex q y x (codeOf k) w j) }) RErr); Str z RErr; Set z RErr }) }); Quot r RErr; Logical l RErr; Sym y RErr; Char k RErr; Str z RErr; Set z RErr }) }); Quot r RErr; Logical l RErr; Sym y RErr; Char k RErr; Str z RErr; Set z RErr }
+fmtPush ex q y x k w j = x |> { Num n (ex q (Push (Str (formatF n k w j)) y)); Quot r RErr; Logical b (ex q (Push (Str (formatF (boolZ b) k w j)) y)); Sym s RErr; Char c (ex q (Push (Str (formatF c k w j)) y)); Str z RErr; Set z RErr }
+"""
+
+
+def _numtext_interpreted() -> str:
+    return (DIR / "numtext.ascii.ski").read_text(encoding="utf-8") + _NUMTEXT_INTERPRETED
+
+
+def _numtext_compiled(truth: bool, lists: bool, text: bool, sets: bool) -> str:
+    """strtol's and format's words over a compiled program's items, which
+    are the program's own: an arm for each constructor it has."""
+    kinds = [("Num", "n"), ("Quot", "q")] + ([("Logical", "b")] if truth else []) \
+        + ([("Sym", "y")] if lists else []) + [("Char", "c"), ("Str", "z")] \
+        + ([("Set", "st")] if sets else [])
+
+    def case(var: str, arms: Dict[str, str]) -> str:
+        return f"{var} |> {{ " + "; ".join(f"{k} {v} {arms.get(k, 'RErr')}" for k, v in kinds) + " }"
+    strtol = ("wStrtol s = s |> { Empty RErr; Push a t (" + case("a", {"Num": "(t |> { Empty RErr; Push x u ("
+              + case("x", {"Str": "(RVal (Push (Num (strtolF z n)) u))"}) + ") })"}) + ") }")
+    push = {"Num": "(RVal (Push (Str (formatF n (codeOf ck) w j)) y))",
+            "Char": "(RVal (Push (Str (formatF c (codeOf ck) w j)) y))"}
+    if truth:
+        push["Logical"] = "(RVal (Push (Str (formatF (boolZ b) (codeOf ck) w j)) y))"
+    fmt = ("wFormat s = s |> { Empty RErr; Push aj t (" + case("aj", {"Num": "(t |> { Empty RErr; Push ai u ("
+           + case("ai", {"Num": "(u |> { Empty RErr; Push ac v (" + case("ac", {"Char": "(specOK (codeOf c) (v |> { Empty RErr; Push x y (" + case("x", push) + ") }) RErr)"}) + ") })"}) + ") })"}) + ") }")
+    fmt = fmt.replace("Num n (t |>", "Num j (t |>", 1).replace("Num n (u |>", "Num w (u |>", 1)
+    fmt = fmt.replace("Char c (specOK (codeOf c)", "Char ck (specOK (codeOf ck)", 1)
+    return ("\n" + (DIR / "numtext.ascii.ski").read_text(encoding="utf-8")
+            + strtol + "\n" + fmt + "\n")
+
+
 def kernel_defs(defs: Dict[str, str]) -> Dict[str, str]:
     """The definitions the interpreted form takes: Joy's own ``EXT`` words
     are the kernel's, and a program's own definition of one stays."""
@@ -833,9 +871,11 @@ def intern_table(programs: Iterable[Program], defs: Dict[str, str]) -> str:
     Only a program set that interns gets the table, the rest the miss."""
     miss = "Def (User n Done)"
     programs = list(programs)
+    numtext = (_numtext_interpreted() if _walk(programs, lambda t: t in ("strtol", "format"))
+               else "strtolP ex q t a = RErr\nformatP ex q t a = RErr\n")
     if not _walk(programs, lambda t: t in ("name", "intern")):
-        return "nameP ex q t a = RErr\ninternP ex q t a = RErr\n"
-    names = (DIR / "names.ascii.ski").read_text(encoding="utf-8")
+        return numtext + "nameP ex q t a = RErr\ninternP ex q t a = RErr\n"
+    names = numtext + (DIR / "names.ascii.ski").read_text(encoding="utf-8")
     if not _walk(programs, lambda t: t == "intern"):
         return names + f"internW n = {miss}\n"
     kdefs = kernel_defs(defs)
@@ -1603,6 +1643,8 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     info = c.list_info()
     kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties(), text, types, sets, nots)
     kernel += _compiled_names(c, info, named, bodied, user_bodies, truth, text, sets)
+    if _walk(list(progs.values()), lambda t: t in ("strtol", "format")):
+        kernel += _numtext_compiled(truth, lists, text, sets)
     out = [kernel, "\n-- static quotations, hoisted\n"]
     for b in bodies:
         name, body = b.split(" ap = ", 1)

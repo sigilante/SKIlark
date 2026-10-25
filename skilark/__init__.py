@@ -142,13 +142,13 @@ class Run:
         return tuple(out)
 
     def text(self, term) -> str:
-        """A name's ``text`` as a string: a letter is its place in the
-        alphabet, an operator sign 62 less its code, negated."""
+        """A name's ``text`` as a string: each character its code less 96
+        (the kernel's code since stage 10)."""
         out = []
         ctor, fields = peel(term, self.t["text"], max_steps=STEPS)
         while ctor == "TCons":
             c = self.number(fields[0])
-            out.append(chr(96 + c if c > 0 else 63 + c))
+            out.append(chr(96 + c))
             ctor, fields = peel(fields[1], self.t["text"], max_steps=STEPS)
         return "".join(out)
 

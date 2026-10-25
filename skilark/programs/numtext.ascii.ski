@@ -1,0 +1,51 @@
+-- strtol and format (strtol.c, format.c) on text, for a program set that
+-- uses one (skilark.joy), in both forms: written in the prelude's
+-- numeral and list operations, a character its code.  strtolF reads as
+-- glibc's strtoll(z, 0, b) does: spaces, a sign, base 0 reading 0x as 16
+-- and 0 as 8, the digits up to the first that is not one, and an invalid
+-- base 0.  formatF writes printf's %*.*lld under the conversion spec: a
+-- negative width left-justifies, a negative precision is 1, and 0 at
+-- precision 0 has no digits
+codeOf c = c |> { Pos k k; Neg m Zero }
+isSpaceT k x y = natIfEq k 32 x (natIfLe 9 k (natIfLe k 13 x y) y)
+digitVal k = natIfLe 48 k (natIfLe k 57 (natSub k 48) (alphaVal k)) (alphaVal k)
+alphaVal k = natIfLe 97 k (natIfLe k 122 (natSub k 87) 99) (natIfLe 65 k (natIfLe k 90 (natSub k 55) 99) 99)
+isX k x y = natIfEq k 120 x (natIfEq k 88 x y)
+-- strtol in one pass that reads its text once, each cell rebuilt from its
+-- parts where it looks ahead: a reducer that shares nothing reads a text
+-- used twice by computing it twice
+accStep v r b d = natIfLe b d v (accT (natAdd (natMul v b) d) r b)
+accT v z b = z |> { TNil v; TCons c r (accStep v r b (digitVal (codeOf c))) }
+-- after a leading 0: 0x and a hex digit is base 16, else ok's base reads on
+zeroX r b = r |> { TNil 0; TCons d u (isX (codeOf d) (u |> { TNil (accT 0 (TCons d TNil) b); TCons e v (natIfLe 16 (digitVal (codeOf e)) (accT 0 (TCons d (TCons e v)) b) (accT 0 (TCons e v) 16)) }) (accT 0 (TCons d u) b)) }
+-- the digits from c then r in base b, base 0 reading 0x as 16 and 0 as 8
+digitsC c r b = b |> { Zero (natIfEq (codeOf c) 48 (zeroX r 8) (accT 0 (TCons c r) 10)); Suc j (natIfEq b 16 (natIfEq (codeOf c) 48 (zeroX r 16) (accT 0 (TCons c r) 16)) (accT 0 (TCons c r) b)) }
+digitsT z b = z |> { TNil 0; TCons c r (digitsC c r b) }
+negOf k = k |> { Zero (Pos Zero); Suc j (Neg j) }
+signC c r b = natIfEq (codeOf c) 45 (negOf (digitsT r b)) (natIfEq (codeOf c) 43 (Pos (digitsT r b)) (Pos (digitsC c r b)))
+skipT z b = z |> { TNil (Pos 0); TCons c r (isSpaceT (codeOf c) (skipT r b) (signC c r b)) }
+strtolF z b = b |> { Neg m (Pos 0); Pos k (natIfEq k 1 (Pos 0) (natIfLe k 36 (skipT z k) (Pos 0))) }
+specOK k x y = natIfEq k 100 x (natIfEq k 105 x (natIfEq k 111 x (natIfEq k 120 x (natIfEq k 88 x y))))
+-- a digit's character from the table of the conversion's case
+lowerT := (TCons (Pos 48) (TCons (Pos 49) (TCons (Pos 50) (TCons (Pos 51) (TCons (Pos 52) (TCons (Pos 53) (TCons (Pos 54) (TCons (Pos 55) (TCons (Pos 56) (TCons (Pos 57) (TCons (Pos 97) (TCons (Pos 98) (TCons (Pos 99) (TCons (Pos 100) (TCons (Pos 101) (TCons (Pos 102) TNil))))))))))))))))
+upperT := (TCons (Pos 48) (TCons (Pos 49) (TCons (Pos 50) (TCons (Pos 51) (TCons (Pos 52) (TCons (Pos 53) (TCons (Pos 54) (TCons (Pos 55) (TCons (Pos 56) (TCons (Pos 57) (TCons (Pos 65) (TCons (Pos 66) (TCons (Pos 67) (TCons (Pos 68) (TCons (Pos 69) (TCons (Pos 70) TNil))))))))))))))))
+-- the digits of m, least first: one pass over m counting its last digit
+-- d and the quotient q.  A reducer that shares nothing computes
+-- a value used twice twice, so nothing computed is used twice: the base
+-- and the table come cased to values, and the digits go on with their
+-- count, so that the padding never measures them again
+fmtD m bj tbl acc n k = m |> { Zero (k acc n); Suc j (dm (Suc j) bj Zero Zero bj tbl acc n k) }
+-- e counts down to the next carry, so no step compares: bj is the base less 1
+dm m bj q d e tbl acc n k = m |> { Zero (fmtD q bj tbl (TCons (listAt tbl d (Pos 48)) acc) (Suc n) k); Suc j (e |> { Zero (dm j bj (Suc q) Zero bj tbl acc n k); Suc e2 (dm j bj q (Suc d) e2 tbl acc n k) }) }
+-- c copies of the character ch before z
+padTimes c ch z = c |> { Zero z; Suc j (padTimes j ch (TCons (Pos ch) z)) }
+magOf v = v |> { Pos m m; Neg m (Suc m) }
+precOf p = p |> { Pos k k; Neg m 1 }
+maxN a b = natIfLe a b b a
+baseOf k = natIfEq k 111 8 (natIfEq k 120 16 (natIfEq k 88 16 10))
+tableOf k = natIfEq k 88 upperT lowerT
+-- the precision's zeros, the sign, the width's spaces, each with the length so far
+precStep v k w p z n = signStep v k w (padTimes (natSub (precOf p) n) 48 z) (maxN (precOf p) n)
+signStep v k w z n = v |> { Pos m (widthStep w z n); Neg m (natIfEq k 100 (widthStep w (TCons (Pos 45) z) (Suc n)) (natIfEq k 105 (widthStep w (TCons (Pos 45) z) (Suc n)) (widthStep w z n))) }
+widthStep w z n = w |> { Pos k (padTimes (natSub k n) 32 z); Neg m (listAppend z (padTimes (natSub (Suc m) n) 32 TNil)) }
+formatF v k w p = baseOf k |> { Zero TNil; Suc bj (tableOf k |> { TNil TNil; TCons c r (fmtD (magOf v) bj (TCons c r) TNil 0 (precStep v k w p)) }) }
