@@ -998,6 +998,21 @@ those that use neither up to 3.8% more, a case on a wider `word`. `step`
 is 61,675 atoms, from 57,570, and the interpreted level-1 runs take
 42,440,422 and 43,700,623, 4.6% more. The compiled form is unchanged.
 
+Then `size` and `at` moved onto skijack 0.2.3's `listLength` and `listAt`
+(skijack #27, #28), which Avon runs natively on lists it holds whole
+(Avon #74); `at` tests its index against the length first, so it still
+errs past the end. On Avon with templates and data jets, to normal form:
+
+| program | own recursion | `listLength`, `listAt` |
+|---|---:|---:|
+| `[1 2 3 4 5 6 7 8 9 10 11 12] size` | 216 | 121 |
+| `[1 2 3 4 5 6 7 8 9 10 11 12] 9 at` | 223 | 138 |
+| `"hello, world" 7 at` | 638 | 571 |
+| `{1 3 5 7 9 11 13} size` | 161 | 101 |
+
+As terms, on aviary, no pinned outcome changes; six pinned programs move
+by under 1%, and `step` is 61,918 atoms, from 61,675.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per
