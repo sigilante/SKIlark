@@ -79,7 +79,7 @@ def test_a_kept_name_survives_as_itself():
 
 def test_interpreted_kernel_sizes(interp):
     s = interp.e.sizes
-    assert (s["exec"], s["execU"], s["step"]) == (68_609, 68_613, 68_549)
+    assert (s["exec"], s["execU"], s["step"]) == (73_752, 73_756, 73_692)
 
 
 @pytest.mark.parametrize("name", sorted(PROGRAMS))

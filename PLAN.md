@@ -1044,6 +1044,37 @@ text) are the next two steps. No pinned outcome elsewhere changes; 27
 programs take up to 2.8% more, and `step` is 68,549 atoms, from 61,918,
 with the signed set order.
 
+*Stage 10: symbols and their names (2026-10-25; `tests/test_symbols.py`).*
+`name`, `body` and `intern` are ext's `Name`, `Body` and `Intern`, each
+modelled from its C source:
+
+- `name` (name.c) gives a symbol's nickname, an operator's spelled as
+  optable.c spells it (`+` is `"plus"`, `>=` `"geql"`), and a literal's
+  type's name (`5 name` is `"integer type"`).
+- `body` (body.c) gives a user definition's body as a quotation of its
+  symbols; any other symbol has none, and errs.
+- `intern` (intern.c) reads a string as Joy's reader would, a name and
+  not a number nor a string with a space or one of `"#'().;[]{}` past
+  its first character, and gives that name's word: a kernel word, an ext
+  word, a derived word as its `Def`, or the program's own definition,
+  and a name it does not know a user symbol with no body, which runs as
+  nothing, as the reference's undefined symbol does (`undeferror` is 0).
+
+Names change their code for it: each character is its code less 96,
+which keeps the letters' codes and the order of names and, unlike the
+operators' old code, holds any character, so `"Zork" intern name` is
+`"Zork"`. `intern` is the interpreted form's alone, as decided: its table
+holds every Joy word, and the compiled form's symbols are the program's
+own, so a compiled program that interns is refused. `name`'s and
+`intern`'s machinery (`programs/names.ascii.ski`) and intern's table, a
+binary search over about 140 names, come only with a program that uses
+them: `step` is 73,692 atoms, from 68,549; 131,171 with `name`; 1.67
+million with `intern`, whose programs take 25,000 to 2.3 million
+contractions and whose tests raise the reader's probe cap. The compiled
+form's `name` and `body` read the program's own symbols, `body` a static
+quotation of each user definition it quotes. No pinned outcome elsewhere
+changes; 47 programs take up to 4.5% more.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per

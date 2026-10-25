@@ -1,0 +1,40 @@
+-- name and intern (name.c, intern.c), for a program set that names or
+-- interns (skilark.joy).  A symbol's name is
+-- the reference's nickname, an operator's spelled (+ is plus), and a
+-- literal's the name of its type; intern reads a name as Joy's reader
+-- would and finds its word in internW, intern's table (skilark.joy), a
+-- name it does not know a definition with no body
+nameP ex q t a = ex q (Push (Str (toCodes (nameText a))) t)
+internP ex q t a = a |> { Num n RErr; Quot r RErr; Logical b RErr; Sym w RErr; Char c RErr; Str z (validName z |> { False RErr; True (ex q (Push (Sym (internW (fromCodes z))) t)) }); Set z RErr }
+nameText a = a |> { Num x (TCons ci (TCons cn (TCons ct (TCons ce (TCons cg (TCons ce (TCons cr (TCons cSpace (TCons ct (TCons cy (TCons cp (TCons ce TNil)))))))))))); Quot x (TCons cl (TCons ci (TCons cs (TCons ct (TCons cSpace (TCons ct (TCons cy (TCons cp (TCons ce TNil))))))))); Logical x (TCons ct (TCons cr (TCons cu (TCons ct (TCons ch (TCons cSpace (TCons cv (TCons ca (TCons cl (TCons cu (TCons ce (TCons cSpace (TCons ct (TCons cy (TCons cp (TCons ce TNil)))))))))))))))); Sym x (nickOf x); Char x (TCons cc (TCons ch (TCons ca (TCons cr (TCons ca (TCons cc (TCons ct (TCons ce (TCons cr (TCons cSpace (TCons ct (TCons cy (TCons cp (TCons ce TNil)))))))))))))); Str x (TCons cs (TCons ct (TCons cr (TCons ci (TCons cn (TCons cg (TCons cSpace (TCons ct (TCons cy (TCons cp (TCons ce TNil))))))))))); Set x (TCons cs (TCons ce (TCons ct (TCons cSpace (TCons ct (TCons cy (TCons cp (TCons ce TNil)))))))) }
+nickOf w = nickW (nameOf w) w
+nickW t w = w |> { Dup t; Swap t; Pop t; Qcons t; Cat t; Unit t; Dip t; Do t; Lit x t; Add (TCons cp (TCons cl (TCons cu (TCons cs TNil)))); Sub (TCons cm (TCons ci (TCons cn (TCons cu (TCons cs TNil))))); Mul (TCons cm (TCons cu (TCons cl TNil))); Div (TCons cd (TCons ci (TCons cv (TCons ci (TCons cd (TCons ce TNil)))))); Rem t; Eql (TCons ce (TCons cq (TCons cl TNil))); Lt (TCons cl (TCons ce (TCons cs (TCons cs TNil)))); Branch t; Ifte t; Uncons t; Null t; Small t; Stack t; Unstack t; Def d (d |> { Named n b (nickT n); User n b n }); Ord t; Chr t; Typeof t; Not t; Choose x t; Ext x t }
+-- the derived operators' nicknames (>= is geql)
+nickT n = eqT n (TCons cGt (TCons cEq TNil)) |> { True (TCons cg (TCons ce (TCons cq (TCons cl TNil)))); False (eqT n (TCons cLt (TCons cEq TNil)) |> { True (TCons cl (TCons ce (TCons cq (TCons cl TNil)))); False (eqT n (TCons cGt TNil) |> { True (TCons cg (TCons cr (TCons ce (TCons ca (TCons ct (TCons ce (TCons cr TNil))))))); False (eqT n (TCons cBang (TCons cEq TNil)) |> { True (TCons cn (TCons ce (TCons cq (TCons cl TNil)))); False n }) }) }) }
+eqT a b = isSame (cmpT a b)
+-- a name as intern.c reads it: not a space first, nor a number, and past
+-- its first character no space and none of "#'().;[]{}
+validName z = z |> { TNil False; TCons c r (spaceC c |> { True False; False (digitC c |> { True False; False ((isMinus c) |> { True (r |> { TNil True; TCons d u (flip (digitC d)) }); False (restName r) }) }) }) }
+restName z = z |> { TNil True; TCons c r (spaceC c |> { True False; False (exclC c |> { True False; False (restName r) }) }) }
+codeIs k c = c |> { Pos m (same m k); Neg m False }
+codeIn lo hi c = c |> { Pos m (less m lo |> { True False; False (flip (less hi m)) }); Neg m False }
+spaceC c = codeIs n32 c |> { True True; False (codeIn n9 n13 c) }
+digitC c = codeIn n48 n57 c
+isMinus c = codeIs n45 c
+exclC c = codeIs n34 c |> { True True; False (codeIs n35 c |> { True True; False (codeIs n39 c |> { True True; False (codeIn n40 n41 c |> { True True; False (codeIs n46 c |> { True True; False (codeIs n59 c |> { True True; False (codeIs n91 c |> { True True; False (codeIs n93 c |> { True True; False (codeIs n123 c |> { True True; False (codeIs n125 c) }) }) }) }) }) }) }) }) }
+n32 := add n29 n3
+n45 := add n29 n16
+n48 := add n29 n19
+n57 := add n29 n28
+n34 := add n29 n5
+n35 := add n29 n6
+n39 := add n29 n10
+n40 := add n29 n11
+n41 := add n29 n12
+n46 := add n29 n17
+n59 := add n29 (add n29 n1)
+n91 := add n62 n29
+n93 := add n62 (add n29 n2)
+n123 := add n62 (add n29 (add n29 n3))
+n125 := add n62 (add n29 (add n29 n5))
+

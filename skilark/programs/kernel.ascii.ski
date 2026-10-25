@@ -32,7 +32,7 @@ named   === Named text prog | User text prog
 -- Avon jets a constructor of at most 32 arguments, and a one-field
 -- constructor of an n-way sum takes n + 1, so word keeps to 31: the
 -- kernel's further words are ext's, a sum of their own under one of word's
-ext     === Size | At | Compare
+ext     === Size | At | Compare | Name | Body | Intern
 word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | Sub | Mul | Div | Rem | Eql | Lt | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Ord | Chr | Typeof | Not | Choose stack | Ext ext
 prog    === Done | Then word prog
 result  === RVal stack | RErr | RTime
@@ -104,7 +104,8 @@ lessI cmp x y = (isSet x |> { True True; False (isSet y) }) |> { True (setLess (
 setLess i j = both (flip (eqS i j)) (subS i j)
 setCons ex q u n z = n |> { Pos m (less m n64 |> { True (ex q (Push (Set (insS m z)) u)); False RErr }); Neg m RErr }
 -- a name's characters as codes, to compare with a string's (strcmp)
-toCodes t = t |> { TNil TNil; TCons c r (TCons (c |> { Pos k (Pos (add a96 k)); Neg m (Pos (monus n62 m)) }) (toCodes r)) }
+toCodes t = t |> { TNil TNil; TCons c r (TCons (plus c (Pos a96)) (toCodes r)) }
+fromCodes t = t |> { TNil TNil; TCons c r (TCons (subZ c (Pos a96)) (fromCodes r)) }
 a96 := mul n8 n12
 n62 := add (mul n6 n10) n2
 catT y z = y |> { TNil z; TCons c r (TCons c (catT r z)) }
@@ -122,9 +123,9 @@ toProg s = s |> { Empty Done; Push a t (Then (wordOf a) (toProg t)) }
 fromProg r = r |> { Done Empty; Then w p (Push (itemOf w) (fromProg p)) }
 -- names: a symbol's name, so that = and < compare two symbols as the
 -- reference does, by name (a literal's word is never a symbol, and Choose
--- never stands in a quotation).  A name's characters are in a code that
--- keeps their order and costs little: a letter is its place in the
--- alphabet, an operator sign 62 less its character code, negated
+-- never stands in a quotation).  A name's characters are each its code
+-- less 96, which keeps their order and makes a letter its place in the
+-- alphabet; toCodes and fromCodes turn a name into a string and back
 n1 := Suc Zero
 n2 := Suc n1
 n3 := Suc n2
@@ -180,15 +181,16 @@ cw := Pos n23
 cx := Pos n24
 cy := Pos n25
 cz := Pos n26
-cBang := Neg n29
-cPlus := Neg n19
-cMinus := Neg n17
-cStar := Neg n20
-cSlash := Neg n15
-cLt := Neg n2
-cEq := Neg n1
-cGt := Neg Zero
-nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Not (TCons cn (TCons co (TCons ct TNil))); Choose v TNil; Ext e (e |> { Size (TCons cs (TCons ci (TCons cz (TCons ce TNil)))); At (TCons ca (TCons ct TNil)); Compare (TCons cc (TCons co (TCons cm (TCons cp (TCons ca (TCons cr (TCons ce TNil))))))) }) }
+cBang := Neg n62
+cPlus := Neg (add n29 n23)
+cMinus := Neg (add n29 n21)
+cStar := Neg (add n29 n24)
+cSlash := Neg (add n29 n19)
+cLt := Neg (add n29 n6)
+cEq := Neg (add n29 n5)
+cGt := Neg (add n29 n4)
+cSpace := Neg (Suc n62)
+nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Not (TCons cn (TCons co (TCons ct TNil))); Choose v TNil; Ext e (e |> { Size (TCons cs (TCons ci (TCons cz (TCons ce TNil)))); At (TCons ca (TCons ct TNil)); Compare (TCons cc (TCons co (TCons cm (TCons cp (TCons ca (TCons cr (TCons ce TNil))))))); Name (TCons cn (TCons ca (TCons cm (TCons ce TNil)))); Body (TCons cb (TCons co (TCons cd (TCons cy TNil)))); Intern (TCons ci (TCons cn (TCons ct (TCons ce (TCons cr (TCons cn TNil)))))) }) }
 
 -- Joy's typeof (globals.h): a user-defined symbol 2, any other 3, a truth
 -- value 4, a character 5, an integer 6, a set 7, a string 8, a list 9
@@ -257,6 +259,9 @@ steps cmp ex w q s = w |> {
 -- value, and the member there, its first at 0, and errs past the end;
 -- compare is the comparison = and < make, as -1, 0 or 1
 exts cmp e ex q s = e |> {
+  Name    (s |> { Empty RErr; Push a t (nameP ex q t a) });
+  Body    (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r RErr; Logical b RErr; Sym w (bodyOf ex q t w); Char c RErr; Str z RErr; Set z RErr }) });
+  Intern  (s |> { Empty RErr; Push a t (internP ex q t a) });
   Compare (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push (Num (orderZ (cmpO cmp b a))) u)) }) });
   Size (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (Push (Num (Pos (listLength r))) t)); Logical b RErr; Sym y RErr; Char c RErr; Str z (ex q (Push (Num (Pos (listLength z))) t)); Set z (ex q (Push (Num (Pos (listLength z))) t)) }) });
   At   (s |> { Empty RErr; Push i t (index i |> { Neg k RErr; Pos m (t |> { Empty RErr; Push a u (a |> { Num n RErr; Quot r (less m (listLength r) |> { False RErr; True (ex q (Push (itemOf (listAt r m Dup)) u)) }); Logical b RErr; Sym y RErr; Char c RErr; Str z (less m (listLength z) |> { False RErr; True (ex q (Push (Char (listAt z m (Pos Zero))) u)) }); Set z (less m (listLength z) |> { False RErr; True (ex q (Push (Num (Pos (listAt z m Zero))) u)) }) }) }) }) }) }
@@ -272,6 +277,12 @@ lexS a b = a |> { SNil (b |> { SNil Same; SCons y t Less }); SCons x r (b |> { S
 -- an index as an integer, and anything else as a negative one, which no
 -- member has
 index i = i |> { Num z z; Quot r (Neg Zero); Logical b (boolZ b); Sym y (Neg Zero); Char c (Neg Zero); Str z (Neg Zero); Set z (Neg Zero) }
+
+-- body (body.c): a user definition's quotation, any other symbol having
+-- none.  name and intern (name.c, intern.c) are nameP and internP, which
+-- each program set supplies (skilark.joy): programs/names.ascii.ski when
+-- it names or interns, else a refusal no other word reaches
+bodyOf ex q t w = w |> { Dup RErr; Swap RErr; Pop RErr; Qcons RErr; Cat RErr; Unit RErr; Dip RErr; Do RErr; Lit x RErr; Add RErr; Sub RErr; Mul RErr; Div RErr; Rem RErr; Eql RErr; Lt RErr; Branch RErr; Ifte RErr; Uncons RErr; Null RErr; Small RErr; Stack RErr; Unstack RErr; Def d (d |> { Named n b RErr; User n b (ex q (Push (Quot b) t)) }); Ord RErr; Chr RErr; Typeof RErr; Not RErr; Choose x RErr; Ext x RErr }
 
 -- The same loop without fuel, for level 1: there the interpreter's
 -- fuel bounds the run, so the object program needs none of its own.

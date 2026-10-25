@@ -24,7 +24,8 @@ namespace.
   filter step fold`, and its library words (`unary2 cleave construct
   cond case split some all equal treerec` and their kin, PLAN.md §3,
   stage 7), and `div pick condlinrec condnestrec casting`, with `compare`
-  a kernel word (stage 9); run by a fold over the program (`exec`, one unit of
+  a kernel word (stage 9), and `name body intern` (stage 10; `intern` in
+  the interpreted form alone); run by a fold over the program (`exec`, one unit of
   fuel per word, the fuel the Church numeral 10,000; `execU`, no fuel).
   SKIlark grows toward Joy in full, in stages (`PLAN.md` §3), and Joy's
   behaviour is the reference implementation's: `tests/joyref.py` models

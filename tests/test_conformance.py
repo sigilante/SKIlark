@@ -18,6 +18,7 @@ import test_types as Y
 import test_sets as Z
 import test_library as B
 import test_pure as P
+import test_symbols as N
 import test_words as W
 from skilark import compiled, interpreted
 
@@ -29,6 +30,8 @@ PINNED = ([("words", n, p) for n, p in W.PROGRAMS.items()]
           + [("sets", n, p) for n, p in Z.PROGRAMS.items()]
           + [("library", n, p) for n, p in B.PROGRAMS.items()]
           + [("pure", n, p) for n, p in P.PROGRAMS.items()]
+          + [("symbols", n, p) for n, p in N.PROGRAMS.items()]
+          + [("intern", n, p) for n, p in N.INTERN.items()]
           + [("modes", n, p) for n, p in M.PROGRAMS.items()])
 TABLES = {"words": (W.INTERPRETED, W.COMPILED),
           "combinators": (C.INTERPRETED, C.COMPILED),
@@ -37,6 +40,8 @@ TABLES = {"words": (W.INTERPRETED, W.COMPILED),
           "sets": (Z.INTERPRETED, Z.COMPILED),
           "library": (B.INTERPRETED, B.COMPILED),
           "pure": (P.INTERPRETED, P.COMPILED),
+          "symbols": (N.INTERPRETED, N.COMPILED),
+          "intern": (N.INTERN_INTERPRETED, None),       # the interpreted form's alone
           "modes": (M.INTERPRETED, M.COMPILED)}
 
 
@@ -45,7 +50,8 @@ def test_the_pinned_outcome_is_the_references(module, name, text):
     want = conform.reference(text)
     interp, comp = TABLES[module]
     assert conform.interpreted_outcome(interp[name][0]) == want, text
-    assert conform.compiled_outcome(comp[name][0]) == conform.compiled_expectation(want), text
+    if comp is not None:
+        assert conform.compiled_outcome(comp[name][0]) == conform.compiled_expectation(want), text
 
 
 #: where SKIlark and the reference part: program -> (the reference's

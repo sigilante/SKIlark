@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import pathlib
 import re
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 Token = Union[int, str, "Def", Tuple[str, object], List["Token"]]
 Program = List[Token]
@@ -71,7 +71,12 @@ KERNEL = {
 #: word's ``Ext`` (``programs/kernel.ascii.ski``); the compiled form, which
 #: has no word sum, derives those ``DEFINITIONS`` has and runs the others
 #: as its own words (``wCompare``)
-EXT = {"size": "Size", "at": "At", "compare": "Compare"}
+EXT = {"size": "Size", "at": "At", "compare": "Compare", "name": "Name", "body": "Body",
+       "intern": "Intern"}
+
+#: the words only the interpreted form has: intern needs every Joy word's
+#: name at run time, and the compiled form's symbols are the program's own
+INTERPRETED_ONLY = {"intern"}
 
 #: a kernel symbol's Joy name, by its constructor
 NAMES = {v: k for k, v in {**KERNEL, **EXT}.items() if not v.startswith("(")}
@@ -98,7 +103,7 @@ SIGNED_WORDS = {"-", "/", "rem", "compare"}
 #: the words that read a quotation as a list, or make one of the stack; a
 #: compiled program reads its quotations' elements, symbols among them,
 #: only when it uses one
-LIST_WORDS = {"uncons", "null", "small", "stack", "unstack"}
+LIST_WORDS = {"uncons", "null", "small", "stack", "unstack", "name", "body"}
 
 #: A derived word's check of its arguments, as the reference's runtime.h
 #: makes it: ``[] [] +`` errs, since ``+`` takes no quotation, and it needs
@@ -640,7 +645,7 @@ def _uses_lists(progs: Iterable[Program]) -> bool:
 
 #: the words that make a character; with a character or a string literal,
 #: a compiled program has characters and strings only when it uses one
-TEXT_WORDS = {"chr", "ord"}
+TEXT_WORDS = {"chr", "ord", "name"}
 
 
 def _uses_text(progs: Iterable[Program]) -> bool:
@@ -742,8 +747,9 @@ _CHARS = {"!": "cBang", "+": "cPlus", "-": "cMinus", "*": "cStar", "/": "cSlash"
 
 
 def name_text(name: str) -> str:
-    """A name as the kernel's ``text``, its characters the kernel's
-    constants (``ca`` .. ``cz`` and the operators')."""
+    """A name as the kernel's ``text``, each character its code less 96:
+    the kernel's constants (``ca`` .. ``cz`` and the operators'), and any
+    other character that integer."""
     out = "TNil"
     for c in reversed(name):
         if c in _CHARS:
@@ -751,7 +757,7 @@ def name_text(name: str) -> str:
         elif "a" <= c <= "z":
             k = "c" + c
         else:
-            raise ValueError(f"no character constant for {c!r} in {name!r}")
+            k = f"({integer(ord(c) - 96)})"
         out = f"(TCons {k} {out})"
     return out
 
@@ -818,12 +824,57 @@ def kernel_defs(defs: Dict[str, str]) -> Dict[str, str]:
     return {k: v for k, v in defs.items() if not (k in EXT and v == DEFINITIONS[k])}
 
 
+def intern_table(programs: Iterable[Program], defs: Dict[str, str]) -> str:
+    """name's and intern's words (``programs/names.ascii.ski``) for a
+    program set that names or interns, else refusals no word reaches; and
+    ``internW``, intern's table: a name's word, in the kernel's code, for
+    every word Joy has and every definition ``defs`` adds; any other name a
+    user definition with no body, as the reference's undefined symbol.
+    Only a program set that interns gets the table, the rest the miss."""
+    miss = "Def (User n Done)"
+    programs = list(programs)
+    if not _walk(programs, lambda t: t in ("name", "intern")):
+        return "nameP ex q t a = RErr\ninternP ex q t a = RErr\n"
+    names = (DIR / "names.ascii.ski").read_text(encoding="utf-8")
+    if not _walk(programs, lambda t: t == "intern"):
+        return names + f"internW n = {miss}\n"
+    kdefs = kernel_defs(defs)
+    words = {k: v for k, v in KERNEL.items() if not v.startswith("(")}
+    entries = [(nm, w) for nm, w in sorted(words.items())]
+    entries += [(nm, f"(Ext {c})") for nm, c in sorted(EXT.items())]
+    for nm in sorted(kdefs):
+        body = datum(expand(parse(kdefs[nm]), kdefs))
+        named = "User" if is_user(nm, kdefs) else "Named"
+        entries.append((nm, f"(Def ({named} {name_text(nm)} ({body})))"))
+    # a binary search over the names in order, which the kernel's code
+    # keeps: about eight comparisons a name, one equation a node, spilled
+    entries.sort(key=lambda e: e[0])
+    lines: List[str] = []
+    count = [0]
+
+    def node(lo: int, hi: int) -> str:
+        if lo >= hi:
+            return miss
+        mid = (lo + hi) // 2
+        k = count[0]
+        count[0] += 1
+        left, right = node(lo, mid), node(mid + 1, hi)
+        nm, w = entries[mid]
+        lines.extend(spill(f"iw{k}", ["n"], f"cmpT n {name_text(nm)} |> {{ Less ({left}); "
+                                            f"Same {w}; More ({right}) }}"))
+        return f"iw{k} n"
+    root = node(0, len(entries))
+    lines.append(f"internW n = {root}")
+    return names + "".join(f"{ln}\n" for ln in lines)
+
+
 def interpreted(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
                 ) -> str:
     """The kernel plus, for each program ``p``: ``pP``, ``rP`` (fuelled)
-    and ``uP`` (unfuelled)."""
-    out = [_kernel(), "\n-- programs, from skilark.joy.interpreted\n"]
-    for name, prog in _programs(programs, kernel_defs(defs)).items():
+    and ``uP`` (unfuelled), and intern's table."""
+    progs = _programs(programs, kernel_defs(defs))
+    out = [_kernel(), intern_table(progs.values(), defs), "\n-- programs, from skilark.joy.interpreted\n"]
+    for name, prog in progs.items():
         out.extend(f"{line}\n" for line in spill(f"p{name}", [], datum(prog)))
         out.append(f"r{name} := exec fuel p{name} Empty\n")
         out.append(f"u{name} := execU p{name} Empty\n")
@@ -1518,16 +1569,40 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     (under ``applyU``)."""
     progs = _programs(programs, defs)
     progs = _programs(programs, plain(progs.values(), defs))
-    signs, lists, truth, text, types, sets, nots = _compile_set(list(progs.values()))
+    if _walk(list(progs.values()), lambda t: t in INTERPRETED_ONLY):
+        raise ValueError("intern is the interpreted form's alone: its table holds every Joy "
+                         "word, and the compiled form's symbols are the program's own")
+    named = _walk(list(progs.values()), lambda t: t == "name")
+    bodied = _walk(list(progs.values()), lambda t: t == "body")
+    user_bodies: Dict[str, Program] = {}
+    if bodied:                          # each user definition quoted: its body, as a quotation
+        users: Set[str] = set()
+
+        def collect(p: Program) -> None:
+            for t in p:
+                if isinstance(t, list):
+                    collect(t)
+                elif isinstance(t, Def):
+                    if t.user:
+                        users.add(t.name)
+                    collect(t.body)
+        for p in progs.values():
+            collect(p)
+        user_bodies = {nm: expand(parse(defs[nm]), defs, quoted=True) for nm in sorted(users)}
+    signs, lists, truth, text, types, sets, nots = _compile_set(
+        list(progs.values()) + list(user_bodies.values()))
     if not lists:
         progs = {name: flatten(prog) for name, prog in progs.items()}
     c = _Compiler(signs, lists)
     tops = {name: c.body(prog) for name, prog in progs.items()}
     if lists:
         c.quot([])
+    for b in user_bodies.values():
+        c.quot(b)
     bodies = c.hoist()
     info = c.list_info()
     kernel = _compiled_kernel(len(c.quots), truth, signs, info, c.empties(), text, types, sets, nots)
+    kernel += _compiled_names(c, info, named, bodied, user_bodies, truth, text, sets)
     out = [kernel, "\n-- static quotations, hoisted\n"]
     for b in bodies:
         name, body = b.split(" ap = ", 1)
@@ -1537,6 +1612,50 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
         out.extend(f"{line}\n" for line in spill(f"c{name}", ["ap"], body))
         out.append(f"r{name} := c{name} (apply fuel) Empty\n")
         out.append(f"u{name} := c{name} applyU Empty\n")
+    return "".join(out)
+
+
+#: the reference's nicknames of the operators (optable.c): name's spelling
+NICKNAMES = {"+": "plus", "-": "minus", "*": "mul", "/": "divide", "=": "eql", "<": "less",
+             ">=": "geql", "<=": "leql", ">": "greater", "!=": "neql"}
+
+#: opername's names of the literal types (optable.c)
+TYPE_NAMES = {"Num": "integer type", "Quot": "list type", "Logical": "truth value type",
+              "Char": "character type", "Str": "string type", "Set": "set type"}
+
+
+def _compiled_names(c: "_Compiler", info: "Optional[_Lists]", named: bool, bodied: bool,
+                    user_bodies: Dict[str, Program], truth: bool, text: bool, sets: bool) -> str:
+    """The compiled form's name and body, for a program set that uses one:
+    a symbol's nickname and a literal's type's name as strings, and a user
+    definition's body, a static quotation, by the program's own symbols."""
+    if not (named or bodied):
+        return ""
+    syms = list(info.syms) if info else []
+    names = list(info.names) if info else []
+    kinds = [("Num", "n"), ("Quot", "q")] + ([("Logical", "b")] if truth else []) \
+        + [("Sym", "y")] + ([("Char", "ch"), ("Str", "z")] if text else []) \
+        + ([("Set", "st")] if sets else [])
+    out = ["\n-- name and body (name.c, body.c), the program's own symbols\n"]
+    if named:
+        def txt(word: str) -> str:
+            return c.text([ord(ch) for ch in word])
+        arms = [f"{k} {v} " + ("(symName y)" if k == "Sym" else txt(TYPE_NAMES[k])) for k, v in kinds]
+        out.append("nameI a = a |> { " + "; ".join(arms) + " }\n")
+        sarms = [f"{y} {txt(NICKNAMES.get(n, n) if not y.startswith('U') else n)}"
+                 for y, n in zip(syms, names)] or ["YNone TNil"]
+        out.append("symName y = y |> { " + "; ".join(sarms) + " }\n")
+        out.append("wName s = s |> { Empty RErr; Push a t (RVal (Push (Str (nameI a)) t)) }\n")
+    if bodied:
+        barms = []
+        for y, n in zip(syms, names):
+            if y.startswith("U") and n in user_bodies:
+                barms.append(f"{y} (RVal (Push (Quot Q{c.index[words(user_bodies[n])]}) t))")
+            else:
+                barms.append(f"{y} RErr")
+        out.append("symBody y t = y |> { " + "; ".join(barms or ["YNone RErr"]) + " }\n")
+        arms = [f"{k} {v} " + ("(symBody y t)" if k == "Sym" else "RErr") for k, v in kinds]
+        out.append("wBody s = s |> { Empty RErr; Push a t (a |> { " + "; ".join(arms) + " }) }\n")
     return "".join(out)
 
 
@@ -1658,6 +1777,8 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
                                   sets, nots)
     else:
         raise ValueError(f"unknown form {form!r}")
+    if form == "interpreted":
+        kernel += intern_table(list(progs.values()) + [expand(parse(defs[n]), defs) for n in keep], defs)
     out = [kernel, "\n".join(hoisted) + ("\n" if hoisted else ""),
            LEVEL1_KERNEL.format(SEGS=" | ".join(segment(n) for n in keep)),
            level1_reader(truth, signs, lists, text, sets),
