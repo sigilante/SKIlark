@@ -251,20 +251,16 @@ steps cmp ex w q s = w |> {
   Choose w (s |> { Empty RErr; Push a t (w |> { Empty RErr; Push x y (x |> { Num n RErr; Quot f (y |> { Empty RErr; Push z v (z |> { Num n RErr; Quot r (truth a |> { False (ex (cat f q) v); True (ex (cat r q) v) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr; Set st RErr }) }); Logical e RErr; Sym g RErr; Char xc RErr; Str xs RErr; Set st RErr }) }) });
   Ext e   (exts e ex q s) }
 
--- ext's words.  size counts an aggregate's members; at takes an index,
--- an integer or a truth value, and the member there, its first at 0
+-- ext's words, on skijack's list operations, which a runtime may run
+-- natively on lists it holds whole (avon DESIGN §6.14).  size counts an
+-- aggregate's members; at takes an index, an integer or a truth value, and
+-- the member there, its first at 0, and errs past the end
 exts e ex q s = e |> {
-  Size (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (Push (Num (Pos (lenP r))) t)); Logical b RErr; Sym y RErr; Char c RErr; Str z (ex q (Push (Num (Pos (lenT z))) t)); Set z (ex q (Push (Num (Pos (lenS z))) t)) }) });
-  At   (s |> { Empty RErr; Push i t (index i |> { Neg k RErr; Pos m (t |> { Empty RErr; Push a u (a |> { Num n RErr; Quot r (atP m r ex q u); Logical b RErr; Sym y RErr; Char c RErr; Str z (atT m z ex q u); Set z (atS m z ex q u) }) }) }) }) }
-lenP r = r |> { Done Zero; Then w p (Suc (lenP p)) }
-lenT z = z |> { TNil Zero; TCons c r (Suc (lenT r)) }
-lenS z = z |> { SNil Zero; SCons m r (Suc (lenS r)) }
+  Size (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (Push (Num (Pos (listLength r))) t)); Logical b RErr; Sym y RErr; Char c RErr; Str z (ex q (Push (Num (Pos (listLength z))) t)); Set z (ex q (Push (Num (Pos (listLength z))) t)) }) });
+  At   (s |> { Empty RErr; Push i t (index i |> { Neg k RErr; Pos m (t |> { Empty RErr; Push a u (a |> { Num n RErr; Quot r (less m (listLength r) |> { False RErr; True (ex q (Push (itemOf (listAt r m Dup)) u)) }); Logical b RErr; Sym y RErr; Char c RErr; Str z (less m (listLength z) |> { False RErr; True (ex q (Push (Char (listAt z m (Pos Zero))) u)) }); Set z (less m (listLength z) |> { False RErr; True (ex q (Push (Num (Pos (listAt z m Zero))) u)) }) }) }) }) }) }
 -- an index as an integer, and anything else as a negative one, which no
 -- member has
 index i = i |> { Num z z; Quot r (Neg Zero); Logical b (boolZ b); Sym y (Neg Zero); Char c (Neg Zero); Str z (Neg Zero); Set z (Neg Zero) }
-atP m r ex q u = r |> { Done RErr; Then w p (m |> { Zero (ex q (Push (itemOf w) u)); Suc k (atP k p ex q u) }) }
-atT m z ex q u = z |> { TNil RErr; TCons c r (m |> { Zero (ex q (Push (Char c) u)); Suc k (atT k r ex q u) }) }
-atS m z ex q u = z |> { SNil RErr; SCons n r (m |> { Zero (ex q (Push (Num (Pos n)) u)); Suc k (atS k r ex q u) }) }
 
 -- The same loop without fuel, for level 1: there the interpreter's
 -- fuel bounds the run, so the object program needs none of its own.

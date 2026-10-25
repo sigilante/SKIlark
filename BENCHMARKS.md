@@ -212,6 +212,18 @@ program uses neither word and pays for a wider `word`. `step` is 61,675
 atoms, from 57,570; the interpreted level-1 runs cost 4.6% more. The
 compiled form, which derives both, is unchanged.
 
+On skijack 0.2.3's `listLength` and `listAt`, which Avon runs natively on
+list words (Avon #74), with templates and data jets:
+
+| program | own recursion | list operations |
+|---|---:|---:|
+| `[1 2 3 4 5 6 7 8 9 10 11 12] size` | 216 | 121 |
+| `[1 2 3 4 5 6 7 8 9 10 11 12] 9 at` | 223 | 138 |
+| `{1 3 5 7 9 11 13} size` | 161 | 101 |
+
+As terms, on aviary, six pinned programs move by under 1% and `step` is
+61,918 atoms.
+
 ## Room left
 
 - *`word`:* 30 constructors of the 31 the cap allows (its one-field

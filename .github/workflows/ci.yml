@@ -22,11 +22,11 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Avon is pinned to the commit that runs natDiv and natRem natively;
-# skijack 0.2.2, from PyPI, has the reducer switch and those operations.
+# Avon is pinned to the commit that runs the list operations natively;
+# skijack 0.2.3, from PyPI, has the reducer switch and those operations.
 # Every job runs a test a core (pytest-xdist).
 env:
-  AVON_REF: d826c644d390f67363af95dfc2db83dc6473ee98      # sigilante/avon #71, natDiv and natRem
+  AVON_REF: 6d346e5462dbcc137ffbcf3150c30ab490fd5e0b      # sigilante/avon #74, list words
 
 jobs:
   # The suite on each Python, its reductions on Avon, which the reference
