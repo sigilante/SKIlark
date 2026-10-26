@@ -1192,7 +1192,8 @@ does the Joy work: printing and parsing move from Python into the kernel.
   - `get`: a factor from the input held, or a read card
     `[2 [id [0 4096]]]` when the input holds none whole.
   - `argc argv`: from the state, which the start event filled.
-  - `getenv`: card 3. `clock`: card 4.
+  - `getenv`: card 3. `clock`: card 4, which answers the run's step
+    count, not time, until binary numerals.
   - `abort`: the next term on the stack it leaves, with no card.
   - `quit`, and the end of the file: the exit card `[5 0]`.
   - A file's `.` prints its top with `put`'s writer, as `joyfile` does.
