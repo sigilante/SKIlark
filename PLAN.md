@@ -1168,6 +1168,63 @@ by 25 to 84 contractions each (median 28, at most 2.7%), and the level-1
 reader's 11 by 8,459 to 13,986, its `topIs` matching `RIO` too. No
 outcome changes, and no compiled pin moves.
 
+*Stage 15, planned: I/O through drivers (proposed 2026-10-26; Avon's
+`DESIGN.md` §9.2, SKIjack's `RUNTIME-DESIGN.md` §3e).* Stage 14's host is
+SKIlark's own and speaks only `RIO`. Under the proposal, a runtime
+performs standard cards (write, read, environment, clock, exit), and
+SKIlark runs as a kernel that emits them. The words keep stage 14's
+behaviour, and the reference model still checks it. What moves is who
+does the Joy work: printing and parsing move from Python into the kernel.
+
+- *The door.* `skilark.export` gains a pill. Its kernel's state holds the
+  file's terms not yet run, the stack, the arguments, the input not yet
+  consumed and, while a request is out, the stopped `RIO`'s word and
+  `q`.
+  - `poke` takes the start event `[0 [0 [argv bits]]]`, or a reply, and
+    runs until it needs an answer it does not hold. It then returns the
+    cards gathered so far and itself.
+  - `RIO` stays the protocol between `exec` and the door, so stage 14's
+    words and pins stand. The door is `skilark.io`'s `Host`, written in
+    SKI, with no world inside.
+- *The words, as cards:*
+  - `put putch putchars`: a write card `[1 [1 bytes]]`, then run on in
+    the same poke, since a write needs no reply.
+  - `get`: a factor from the input held, or a read card
+    `[2 [id [0 4096]]]` when the input holds none whole.
+  - `argc argv`: from the state, which the start event filled.
+  - `getenv`: card 3. `clock`: card 4.
+  - `abort`: the next term on the stack it leaves, with no card.
+  - `quit`, and the end of the file: the exit card `[5 0]`.
+  - A file's `.` prints its top with `put`'s writer, as `joyfile` does.
+- *The writer,* for `put`, prints every value `joyfile.write` prints:
+  integers, truth values, characters, strings with their escapes, sets,
+  lists and symbols. It builds on stage 11's number text and `name`'s
+  table.
+- *The reader,* for `get`, finds a factor where `scan.c` and `factor_end`
+  find one, then reads it: `strtol` for a number, `intern`'s table for a
+  word, and the escapes for characters and strings. It is the largest new
+  piece, and the last.
+- *Tests.*
+  - Each stage-14 program and `examples/io.joy` must give the same output
+    through the door, in the same world, under SKIjack's reference
+    drivers in Python.
+  - The model checks outcomes as now.
+  - `avon run` must print `examples/io.out` byte for byte.
+  - The words' pins stay; the door gets pins of its own.
+- *The compiled form* still refuses I/O. It has no datum continuation to
+  keep in the door's state.
+- *Order:* (a) the door, with writes, arguments, the environment, the
+  clock, `abort`, `quit` and the exit; (b) files in the door; (c) `get`
+  and the reader. Each is its own pull request after the proposal is
+  decided.
+- *Risks:* the writer and the reader cost contractions that Python spends
+  outside the run today. In copy mode the reader's scanning could dominate
+  a program that reads much. Share mode's list and numeral words should
+  hold the bytes natively, and jets can license the writer later. No
+  figure exists yet: measuring (a) gives the first.
+- *The stage-14 host stays* as the reference's world in tests, and as the
+  command line's path for a reducer that is not a driver runtime.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per
