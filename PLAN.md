@@ -1209,7 +1209,9 @@ does the Joy work: printing and parsing move from Python into the kernel.
     through the door, in the same world, under SKIjack's reference
     drivers in Python.
   - The model checks outcomes as now.
-  - `avon run` must print `examples/io.out` byte for byte.
+  - `avon run --kernel` must print `examples/io.out` byte for byte.
+    A SKIlark program without I/O stays a plain term, run by
+    `avon run` or `avon reduce`, as now.
   - The words' pins stay; the door gets pins of its own.
 - *The compiled form* still refuses I/O. It has no datum continuation to
   keep in the door's state.
