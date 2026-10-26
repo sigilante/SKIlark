@@ -1168,7 +1168,7 @@ by 25 to 84 contractions each (median 28, at most 2.7%), and the level-1
 reader's 11 by 8,459 to 13,986, its `topIs` matching `RIO` too. No
 outcome changes, and no compiled pin moves.
 
-*Stage 15, planned: I/O through drivers (proposed 2026-10-26; Avon's
+*Stage 15, planned: I/O through drivers (decided 2026-10-26; Avon's
 `DESIGN.md` §9.2, SKIjack's `RUNTIME-DESIGN.md` §3e).* Stage 14's host is
 SKIlark's own and speaks only `RIO`. Under the proposal, a runtime
 performs standard cards (write, read, environment, clock, exit), and
@@ -1215,8 +1215,8 @@ does the Joy work: printing and parsing move from Python into the kernel.
   keep in the door's state.
 - *Order:* (a) the door, with writes, arguments, the environment, the
   clock, `abort`, `quit` and the exit; (b) files in the door; (c) `get`
-  and the reader. Each is its own pull request after the proposal is
-  decided.
+  and the reader. Each is its own pull request, after SKIjack's
+  reference drivers.
 - *Risks:* the writer and the reader cost contractions that Python spends
   outside the run today. In copy mode the reader's scanning could dominate
   a program that reads much. Share mode's list and numeral words should
