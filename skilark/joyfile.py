@@ -5,12 +5,19 @@ terms each ended by ``.``.  Every term runs on the stack the terms before
 it left, and after each the reference prints the top of the stack and
 pops it (its default autoput, 1): ``run_file`` gives those lines.
 
-SKIlark runs a program from the empty stack, so the k-th line comes from
-the first k terms as one program, a pop after each but the last when the
-stack is not empty: the same values, the earlier terms run again.  One
-program for the whole file, its stack a list each term runs on by
-``infra``, would be cheaper under sharing but not under the tests' copy
-mode, which computes the list again at every term that looks at it.
+Interpreted, each term is its own run, ``execU`` of the term on the stack
+the term before it left, reduced to normal form so that a term starts
+from data and not from the work that made it, and the host
+(``skilark.io``) answers its I/O words and writes its output in order
+with the lines.  Where a term errs,
+the next runs on the stack the erring term began with: ``RErr`` carries
+no stack, where the reference keeps the stack as the error left it.
+``abort`` keeps its stack, as the reference does, and ``quit`` ends the
+file.
+
+Compiled, which has no I/O, the k-th line comes from the first k terms as
+one program, a pop after each but the last when the stack is not empty:
+the same values, the earlier terms run again.
 """
 
 from __future__ import annotations
@@ -206,7 +213,40 @@ def write(v: Tuple) -> str:
 
 def programs(text: str) -> Tuple[Dict[str, str], List[str]]:
     """A file's definitions, all of them, and for each term the program
-    whose top is the line the reference prints after it."""
+    whose top is the line the reference prints after it, from the empty
+    stack: the terms so far, a pop after each but the last."""
+    defs, terms = _terms(text)
+    progs = [" ".join(f"{t} {POP}" for t in terms[:k]) + " " + terms[k] for k in range(len(terms))]
+    return defs, progs
+
+
+#: the reader's probe cap for a file, whose compiled last program is all its terms
+FILE_STEPS = 2_000_000_000
+
+
+def run_file(text: str, form: str = "interpreted", host=None) -> List[str]:
+    """The lines the reference prints running the file (``run_text``)."""
+    return run_text(text, form, host).splitlines()
+
+
+def run_text(text: str, form: str = "interpreted", host=None) -> str:
+    """What the reference writes running the file: what its I/O words
+    write, the top after each term on a line, ``run time error`` where a
+    term errs, nothing where the stack is empty.  Interpreted by default,
+    whose quotations read back as written; ``host`` answers the I/O words,
+    an empty world (``skilark.io.Host()``) when none is given."""
+    import skilark
+    saved = skilark.STEPS
+    skilark.STEPS = max(saved, FILE_STEPS)
+    try:
+        if form == "interpreted":
+            return _run_interpreted(text, host)
+        return "".join(f"{line}\n" for line in _run_compiled(text))
+    finally:
+        skilark.STEPS = saved
+
+
+def _terms(text: str) -> Tuple[Dict[str, str], List[str]]:
     defs: Dict[str, str] = {}
     terms: List[str] = []
     for kind, item in read(text):
@@ -214,34 +254,46 @@ def programs(text: str) -> Tuple[Dict[str, str], List[str]]:
             defs.update(item)
         else:
             terms.append(item)
-    progs = [" ".join(f"{t} {POP}" for t in terms[:k]) + " " + terms[k] for k in range(len(terms))]
-    return defs, progs
+    return defs, terms
 
 
-#: the reader's probe cap for a file, whose last program is all its terms
-FILE_STEPS = 2_000_000_000
+def _run_interpreted(text: str, host) -> str:
+    from aviary_kernel.terms import App
+    from skijack.run import run_level0
+    from . import interpreted
+    from .io import Host
+    host = Host() if host is None else host
+    own, terms = _terms(text)
+    run = interpreted({f"t{i}": t for i, t in enumerate(terms)}, dict(joy.DEFINITIONS, **own))
+    stack = run.e.terms["Empty"]
+    for i in range(len(terms)):
+        ctor, after, _ = run.drive(App(App(run.e.terms["execU"], run.e.terms[f"pt{i}"]), stack), host)
+        if after is not None:
+            after = run_level0(after, FILE_STEPS, whnf_only=False).term
+        if ctor == "RVal":
+            top = run.pop(after, 1)
+            if top is None:
+                stack = after
+            else:
+                host.write(write(top[0][0]) + "\n")
+                stack = top[1]
+        elif ctor == "RAbort":
+            stack = after
+        elif ctor == "RQuit":
+            break
+        elif ctor == "RErr":
+            host.write("run time error\n")
+        else:
+            host.write("out of fuel\n")
+    return host.text()
 
 
-def run_file(text: str, form: str = "interpreted") -> List[str]:
-    import skilark
-    saved = skilark.STEPS
-    skilark.STEPS = max(saved, FILE_STEPS)
-    try:
-        return _run_file(text, form)
-    finally:
-        skilark.STEPS = saved
-
-
-def _run_file(text: str, form: str) -> List[str]:
-    """The lines the reference prints running the file: the top after each
-    term, ``run time error`` where a term errs, nothing where the stack is
-    empty.  Interpreted by default, whose quotations read back as written."""
-    from . import compiled, interpreted
-    make = interpreted if form == "interpreted" else compiled
+def _run_compiled(text: str) -> List[str]:
+    from . import compiled
     own, progs = programs(text)
     defs = dict(joy.DEFINITIONS, **own)
     names = {f"t{i}": p for i, p in enumerate(progs)}
-    run = make(names, defs)
+    run = compiled(names, defs)
     lines: List[str] = []
     for name in names:
         (kind, stack), _ = run.run("u" + name)
@@ -250,8 +302,7 @@ def _run_file(text: str, form: str) -> List[str]:
         elif kind == "RTime":
             lines.append("out of fuel")
         elif stack:
-            top = stack[-1]
-            lines.append(write(value(top)) if form == "interpreted" else write_compiled(top))
+            lines.append(write_compiled(stack[-1]))
     return lines
 
 

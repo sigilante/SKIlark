@@ -32,10 +32,13 @@ named   === Named text prog | User text prog
 -- Avon jets a constructor of at most 32 arguments, and a one-field
 -- constructor of an n-way sum takes n + 1, so word keeps to 31: the
 -- kernel's further words are ext's, a sum of their own under one of word's
-ext     === Size | At | Compare | Name | Body | Intern | Strtol | Format
+ext     === Size | At | Compare | Name | Body | Intern | Strtol | Format | Io nat
 word    === Dup | Swap | Pop | Qcons | Cat | Unit | Dip | Do | Lit item | Add | Sub | Mul | Div | Rem | Eql | Lt | Branch | Ifte | Uncons | Null | Small | Stack | Unstack | Def named | Ord | Chr | Typeof | Not | Choose stack | Ext ext
 prog    === Done | Then word prog
-result  === RVal stack | RErr | RTime
+-- RIO is a run stopped at an I/O word for its host: the word (skilark.joy.IO,
+-- by number), the stack, and the rest of the program, which the host runs
+-- on the stack its answer leaves (skilark.io)
+result  === RVal stack | RErr | RTime | RIO nat stack prog
 
 -- naturals, on skijack's numeral operations, which a runtime may run
 -- natively on numerals it holds as words (avon DESIGN §6.10); each cases on
@@ -190,7 +193,7 @@ cLt := Neg (add n29 n6)
 cEq := Neg (add n29 n5)
 cGt := Neg (add n29 n4)
 cSpace := Neg (Suc n62)
-nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Not (TCons cn (TCons co (TCons ct TNil))); Choose v TNil; Ext e (e |> { Size (TCons cs (TCons ci (TCons cz (TCons ce TNil)))); At (TCons ca (TCons ct TNil)); Compare (TCons cc (TCons co (TCons cm (TCons cp (TCons ca (TCons cr (TCons ce TNil))))))); Name (TCons cn (TCons ca (TCons cm (TCons ce TNil)))); Body (TCons cb (TCons co (TCons cd (TCons cy TNil)))); Intern (TCons ci (TCons cn (TCons ct (TCons ce (TCons cr (TCons cn TNil)))))); Strtol (TCons cs (TCons ct (TCons cr (TCons ct (TCons co (TCons cl TNil)))))); Format (TCons cf (TCons co (TCons cr (TCons cm (TCons ca (TCons ct TNil)))))) }) }
+nameOf w = w |> { Dup (TCons cd (TCons cu (TCons cp TNil))); Swap (TCons cs (TCons cw (TCons ca (TCons cp TNil)))); Pop (TCons cp (TCons co (TCons cp TNil))); Qcons (TCons cc (TCons co (TCons cn (TCons cs TNil)))); Cat (TCons cc (TCons ca (TCons ct TNil))); Unit (TCons cu (TCons cn (TCons ci (TCons ct TNil)))); Dip (TCons cd (TCons ci (TCons cp TNil))); Do (TCons ci TNil); Lit a TNil; Add (TCons cPlus TNil); Sub (TCons cMinus TNil); Mul (TCons cStar TNil); Div (TCons cSlash TNil); Rem (TCons cr (TCons ce (TCons cm TNil))); Eql (TCons cEq TNil); Lt (TCons cLt TNil); Branch (TCons cb (TCons cr (TCons ca (TCons cn (TCons cc (TCons ch TNil)))))); Ifte (TCons ci (TCons cf (TCons ct (TCons ce TNil)))); Uncons (TCons cu (TCons cn (TCons cc (TCons co (TCons cn (TCons cs TNil)))))); Null (TCons cn (TCons cu (TCons cl (TCons cl TNil)))); Small (TCons cs (TCons cm (TCons ca (TCons cl (TCons cl TNil))))); Stack (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))); Unstack (TCons cu (TCons cn (TCons cs (TCons ct (TCons ca (TCons cc (TCons ck TNil))))))); Def d (d |> { Named n b n; User n b n }); Ord (TCons co (TCons cr (TCons cd TNil))); Chr (TCons cc (TCons ch (TCons cr TNil))); Typeof (TCons ct (TCons cy (TCons cp (TCons ce (TCons co (TCons cf TNil)))))); Not (TCons cn (TCons co (TCons ct TNil))); Choose v TNil; Ext e (e |> { Size (TCons cs (TCons ci (TCons cz (TCons ce TNil)))); At (TCons ca (TCons ct TNil)); Compare (TCons cc (TCons co (TCons cm (TCons cp (TCons ca (TCons cr (TCons ce TNil))))))); Name (TCons cn (TCons ca (TCons cm (TCons ce TNil)))); Body (TCons cb (TCons co (TCons cd (TCons cy TNil)))); Intern (TCons ci (TCons cn (TCons ct (TCons ce (TCons cr (TCons cn TNil)))))); Strtol (TCons cs (TCons ct (TCons cr (TCons ct (TCons co (TCons cl TNil)))))); Format (TCons cf (TCons co (TCons cr (TCons cm (TCons ca (TCons ct TNil)))))); Io o (ioName o) }) }
 
 -- Joy's typeof (globals.h): a user-defined symbol 2, any other 3, a truth
 -- value 4, a character 5, an integer 6, a set 7, a string 8, a list 9
@@ -264,6 +267,7 @@ exts cmp e ex q s = e |> {
   Intern  (s |> { Empty RErr; Push a t (internP ex q t a) });
   Strtol  (s |> { Empty RErr; Push a t (strtolP ex q t a) });
   Format  (s |> { Empty RErr; Push a t (formatP ex q t a) });
+  Io o    (RIO o s q);
   Compare (s |> { Empty RErr; Push a t (t |> { Empty RErr; Push b u (ex q (Push (Num (orderZ (cmpO cmp b a))) u)) }) });
   Size (s |> { Empty RErr; Push a t (a |> { Num n RErr; Quot r (ex q (Push (Num (Pos (listLength r))) t)); Logical b RErr; Sym y RErr; Char c RErr; Str z (ex q (Push (Num (Pos (listLength z))) t)); Set z (ex q (Push (Num (Pos (listLength z))) t)) }) });
   At   (s |> { Empty RErr; Push i t (index i |> { Neg k RErr; Pos m (t |> { Empty RErr; Push a u (a |> { Num n RErr; Quot r (less m (listLength r) |> { False RErr; True (ex q (Push (itemOf (listAt r m Dup)) u)) }); Logical b RErr; Sym y RErr; Char c RErr; Str z (less m (listLength z) |> { False RErr; True (ex q (Push (Char (listAt z m (Pos Zero))) u)) }); Set z (less m (listLength z) |> { False RErr; True (ex q (Push (Num (Pos (listAt z m Zero))) u)) }) }) }) }) }) }

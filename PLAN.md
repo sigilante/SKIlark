@@ -1132,6 +1132,42 @@ runs as, its size as a tree and shared, and what it reduces to;
 reduces either in the contractions SKIjack's reducer counts. `1 2 +` is
 644 atoms compiled and 75,000 interpreted, the kernel's `step` with it.
 
+*Stage 14: I/O (2026-10-27; `tests/test_io.py`).* `put putch putchars
+get argc argv getenv clock abort quit` are ext's `Io n`, n the word's
+place in `joy.IO`, in the interpreted form alone. The kernel has no
+effects: an I/O word ends the run as `RIO n s q`, the word, the stack and
+the rest of the program, and the host (`skilark.io`) does what the
+word's C source does and runs `q` on the stack its answer leaves. The
+continuation is `q`, a datum, because skijack types no function in a
+constructor's field; the compiled form has no such datum and refuses the
+words, as it refuses `intern`. Fuel restarts after each answer, since it
+is not a datum either.
+
+- *The host* answers from a world: input text, arguments, an
+  environment, a clock. Tests and the model share one fixed world, so
+  each program's outcome and output are checked against the reference's
+  (24 programs); `skilark.io.live` is this process's, which the command
+  line uses.
+- *Between stops* the host reduces `q` and the stack to normal form:
+  copy mode would otherwise carry each term's unreduced work into the
+  next, and `3 [dup 0 >] [dup put 1 -] while` passed 1.8 GB before it.
+- *Files* now run a term at a time, each on the stack the last left,
+  reduced to normal form, in place of stage 12's prefix programs. An
+  error no longer spoils the lines after it, and `abort` keeps its
+  stack, as the reference does. One deviation is pinned: after an error
+  SKIlark runs on the stack the term began with, where the reference
+  keeps the stack as the error left it, since `RErr` carries none.
+- *Left for binary numerals:* `time`, `rand`, and the words on times
+  (`localtime gmtime mktime strftime`) yield numbers near 2^31 and past
+  it, which a unary numeral cannot hold.
+
+`ext` and `result` each gain a constructor, and `step` is 76,623 atoms,
+from 75,650: `name`'s table of I/O names comes only with programs that
+name. The new constructor moves 101 interpreted pins and 12 of `intern`'s
+by 25 to 84 contractions each (median 28, at most 2.7%), and the level-1
+reader's 11 by 8,459 to 13,986, its `topIs` matching `RIO` too. No
+outcome changes, and no compiled pin moves.
+
 ## 4. Risks
 
 - **Mutual recursion.** The parameter workaround costs one argument per
