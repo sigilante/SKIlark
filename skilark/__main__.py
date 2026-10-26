@@ -2,7 +2,10 @@
 interpreted and the compiled form and print each outcome with its host
 contraction count.  ``python -m skilark FILE.joy`` runs a Joy file as the
 reference does, printing the top of the stack after each term
-(``skilark.joyfile``).  ``--ski`` shows instead the program as the
+(``skilark.joyfile``).  The I/O words (``put get argv``, ...) act on this
+process: its standard input and output, arguments and environment
+(``skilark.io.live``); a program that uses one runs once, interpreted and
+unfuelled, since running it again would act again.  ``--ski`` shows instead the program as the
 closed S, K, I term it runs as, its size, and what it reduces to;
 ``--ski-out FILE`` writes that term, as Avon's SKIT (``.skit``) or as
 skijack's shared form (``.dag``), for ``avon reduce``.  ``--define "sq == dup +"`` adds a definition.
@@ -52,16 +55,27 @@ def main(argv=None) -> int:
             print(f"skilark: {ex}", file=sys.stderr)
             return 1
     if args.program.endswith(".joy") and os.path.isfile(args.program):
-        from .joyfile import JoyFileError, run_file
+        from .io import live
+        from .joyfile import JoyFileError, run_file, run_text
         with open(args.program, encoding="utf-8") as f:
             text = f.read()
         try:
-            for line in run_file(text, "compiled" if args.form == "compiled" else "interpreted"):
-                print(line)
+            if args.form == "compiled":
+                for line in run_file(text, "compiled"):
+                    print(line)
+            else:
+                run_text(text, host=live([args.program]))   # live writes as it goes
         except (JoyFileError, SkijackError, ValueError) as ex:
             print(f"skilark: {args.program}: {ex}", file=sys.stderr)
             return 1
         return 0
+    try:
+        uses_io = joy._walk([joy.expand(joy.parse(args.program), defs)], lambda t: t in joy.IO)
+    except ValueError as ex:
+        print(f"skilark: {ex}", file=sys.stderr)
+        return 1
+    if uses_io:
+        return _run_io(args.program, defs)
     forms = ["interpreted", "compiled"] if args.form == "both" else [args.form]
     try:
         return _run(forms, args.program, defs)
@@ -117,6 +131,17 @@ def _run(forms, program, defs) -> int:
             (ctor, stack), steps = run.run(pre + "p")
             shown = ctor if stack is None else " ".join(_show(x) for x in stack)
             print(f"{form:12} {label:10} {steps:>9,}  {shown}")
+    return 0
+
+
+def _run_io(program, defs) -> int:
+    """A program with I/O words, once: interpreted, unfuelled, on this
+    process's world; its outcome after what it writes."""
+    from .io import live
+    run = interpreted({"p": program}, defs)
+    (ctor, stack), steps = run.run("up", host=live(["skilark"]))
+    shown = ctor if stack is None else " ".join(_show(x) for x in stack)
+    print(f"\n{'interpreted':12} {'unfuelled':10} {steps:>9,}  {shown}")
     return 0
 
 

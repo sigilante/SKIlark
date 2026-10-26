@@ -72,7 +72,7 @@ class Run:
             if w == "Def":
                 word = (w, self.name(wf[0]))
             elif w == "Ext":                        # ext's word, by its constructor
-                word = peel(wf[0], self.t["ext"], max_steps=STEPS)[0]
+                word = self.ext(wf[0])
             elif w == "Lit" and "named" in self.t:  # the kernel's: Lit of an item
                 word = self.literal(wf[0])
             elif w == "Lit":                        # phase 1's and the basis's
@@ -112,8 +112,16 @@ class Run:
             return joy.symbol_name(peel(term, self.t["sym"], max_steps=STEPS)[0])
         ctor, fields = peel(term, self.t["word"], max_steps=STEPS)
         if ctor == "Ext":
-            ctor, _ = peel(fields[0], self.t["ext"], max_steps=STEPS)
+            ctor = self.ext(fields[0])
         return self.name(fields[0]) if ctor == "Def" else joy.NAMES[ctor]
+
+    def ext(self, term) -> str:
+        """An ext word by its constructor; an I/O word, ``Io n``, by its
+        name's (``joy.IO``)."""
+        ctor, fields = peel(term, self.t["ext"], max_steps=STEPS)
+        if ctor == "Io":
+            return list(joy.IO.values())[self.pr.read_nat(fields[0], max_steps=STEPS)]
+        return ctor
 
     def name(self, term) -> str:
         """A ``Def``'s name, from its ``named`` field."""
@@ -171,39 +179,156 @@ class Run:
             ctor, fields = peel(term, self.t["stack"], max_steps=STEPS)
             if ctor == "Empty":
                 return items[::-1]
-            kind, payload = peel(fields[0], self.t["item"], max_steps=STEPS)
-            if kind == "Num":
-                items.append(self.number(payload[0]))
-            elif kind == "Logical":
-                b, _ = peel(payload[0], self.t["logical"], max_steps=STEPS)
-                items.append(b == "True")
-            elif kind == "Sym":
-                items.append(("Sym", self.symbol(payload[0])))
-            elif kind == "Char":
-                items.append(("Char", self.number(payload[0])))
-            elif kind == "Str":
-                items.append(("Str", self.string(payload[0])))
-            elif kind == "Set":
-                items.append(("Set", self.members(payload[0])))
-            elif self.mode == "compiled":
-                items.append(self.quot(payload[0]))
-            else:
-                items.append(self.prog(payload[0]))
+            items.append(self.item(fields[0]))
             term = fields[1]
+
+    def item(self, term) -> Any:
+        """A stack item: an integer, a truth value, a quotation (by the
+        form's reading), or a tagged symbol, character, string or set."""
+        kind, payload = peel(term, self.t["item"], max_steps=STEPS)
+        if kind == "Num":
+            return self.number(payload[0])
+        if kind == "Logical":
+            return peel(payload[0], self.t["logical"], max_steps=STEPS)[0] == "True"
+        if kind == "Sym":
+            return ("Sym", self.symbol(payload[0]))
+        if kind == "Char":
+            return ("Char", self.number(payload[0]))
+        if kind == "Str":
+            return ("Str", self.string(payload[0]))
+        if kind == "Set":
+            return ("Set", self.members(payload[0]))
+        if self.mode == "compiled":
+            return self.quot(payload[0])
+        return self.prog(payload[0])
+
+    # ------------------------------------------------------------ writers
+    #
+    # The I/O host's (skilark.io): values, as the reference model's tagged
+    # tuples (joyfile.value), built as the kernel's terms
+
+    def _c(self, name: str, *args):
+        t = self.e.terms[name]
+        for a in args:
+            t = App(t, a)
+        return t
+
+    def nat_term(self, n: int):
+        t = self.e.terms["Zero"]
+        suc = self.e.terms["Suc"]
+        for _ in range(n):
+            t = App(suc, t)
+        return t
+
+    def int_term(self, n: int):
+        return self._c("Pos", self.nat_term(n)) if n >= 0 else self._c("Neg", self.nat_term(-n - 1))
+
+    def text_term(self, codes: Sequence[int], name: bool = False):
+        """A string's codes as ``text``; a name's (``name``), each less 96."""
+        t = self.e.terms["TNil"]
+        for c in reversed(codes):
+            t = self._c("TCons", self.int_term(c - 96 if name else c), t)
+        return t
+
+    def item_term(self, v):
+        kind, x = v
+        if kind == "N":
+            return self._c("Num", self.int_term(x))
+        if kind == "B":
+            return self._c("Logical", self.e.terms["True" if x else "False"])
+        if kind == "C":
+            return self._c("Char", self.int_term(x))
+        if kind == "T":
+            return self._c("Str", self.text_term(x))
+        if kind == "Z":
+            t = self.e.terms["SNil"]
+            for m in sorted(x, reverse=True):
+                t = self._c("SCons", self.nat_term(m), t)
+            return self._c("Set", t)
+        if kind == "L":
+            return self._c("Quot", self.prog_term(x))
+        if kind == "S":
+            return self._c("Sym", self.word_term(x))
+        raise ValueError(f"no item for {v!r}")
+
+    def word_term(self, name: str):
+        """A symbol's word: Joy's own, or else an undefined symbol, a user
+        definition with no body, as intern makes one."""
+        if name in joy.KERNEL and not joy.KERNEL[name].startswith("("):
+            return self.e.terms[joy.KERNEL[name]]
+        if name in joy.EXT:
+            return self._c("Ext", self.e.terms[joy.EXT[name]])
+        if name in joy.IO:
+            return self._c("Ext", self._c("Io", self.nat_term(joy.IO_CODES[name])))
+        return self._c("Def", self._c("User", self.text_term([ord(c) for c in name], True),
+                                      self.e.terms["Done"]))
+
+    def prog_term(self, elements):
+        t = self.e.terms["Done"]
+        for v in reversed(elements):
+            w = self.word_term(v[1]) if v[0] == "S" else self._c("Lit", self.item_term(v))
+            t = self._c("Then", w, t)
+        return t
+
+    def pop(self, stack, n: int):
+        """The top ``n`` items of a stack term as values, top first, and
+        the rest of it; None when it holds fewer."""
+        from .joyfile import value
+        out = []
+        for _ in range(n):
+            ctor, fields = peel(stack, self.t["stack"], max_steps=STEPS)
+            if ctor == "Empty":
+                return None
+            out.append(value(self.item(fields[0])))
+            stack = fields[1]
+        return out, stack
+
+    def push(self, stack, v):
+        return self._c("Push", self.item_term(v), stack)
 
     def result(self, term) -> Outcome:
         ctor, fields = peel(term, self.t["result"], max_steps=STEPS)
         return (ctor, self.stack(fields[0]) if ctor == "RVal" else None)
 
+    def drive(self, term, host=None, max_steps: int = STEPS, fuelled: bool = False):
+        """Reduce a run, answering its I/O words from ``host``: its end
+        (``RVal``, ``RErr``, ``RTime``; ``RAbort``, ``RQuit``; ``RIO``
+        with no host), the stack term an ``RVal`` or ``RAbort`` leaves, and
+        the contractions spent.  After an answer the rest runs as
+        ``execU q s``, or under ``exec fuel`` when ``fuelled``, ``q`` and
+        ``s`` reduced to normal form first: data, not the work that made
+        them, which copy mode would otherwise carry from stop to stop.
+        Those reductions are the host's, outside the count."""
+        steps = 0
+        while True:
+            r = run_level0(term, max_steps)
+            steps += r.steps
+            ctor, fields = peel(r.term, self.t["result"], max_steps=STEPS)
+            if ctor != "RIO" or host is None:
+                return ctor, (fields[0] if ctor == "RVal" else None), steps
+            answer = host.answer(self, self.pr.read_nat(fields[0], max_steps=STEPS), fields[1])
+            if answer[0] != "stack":
+                return answer[0], (answer[1] if answer[0] == "RAbort" else None), steps
+            loop = (App(self.e.terms["exec"], self.e.terms["fuel"]) if fuelled
+                    else self.e.terms["execU"])
+            rest, stack = (run_level0(x, max_steps, whnf_only=False).term
+                           for x in (fields[2], answer[1]))
+            term = App(App(loop, rest), stack)
+
     # ------------------------------------------------------------ running
 
-    def run(self, name: str, max_steps: int = STEPS) -> Tuple[Outcome, int]:
-        """A declared run's outcome and its host contraction count.  At
+    def run(self, name: str, max_steps: int = STEPS, host=None) -> Tuple[Outcome, int]:
+        """A declared run's outcome and its host contraction count, its
+        I/O words answered by ``host`` (``skilark.io``) when one is given,
+        else its stop at the first one ``("RIO", None)``.  At
         level 1 the outcome is the interpreter's (``RValN`` carrying the
         encoded result, which is decoded and read; ``RTimeN``, ``RErrN``
         or ``RBlockN`` as themselves)."""
         if self.mode != "level1":
             term = self.e.terms[name]
+            if host is not None:
+                ctor, stack, steps = self.drive(term, host, max_steps, name.startswith("r"))
+                return (ctor, self.stack(stack) if ctor == "RVal" else None), steps
             return self.result(term), run_level0(term, max_steps).steps
         p = self.e.level1[name]
         out = run_level1(p, max_steps)

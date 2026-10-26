@@ -1,0 +1,15 @@
+(* io.joy: writing as the program runs, the interpreter's arguments,
+   abort and quit.  The I/O words are the interpreted form's. *)
+
+DEFINE say == putchars 10 putch .
+
+"hello from SKIlark" say .
+[1 2 3] [put 32 putch] step 10 putch .   # each element as it comes
+"squares:" putchars
+  [1 2 3 4] [32 putch dup * put] step 10 putch .
+argc .                                  # the interpreter's own name counts
+argv first .
+7 8 abort .                             # the term ends; the stack stays
+.                                       # so 8 is still on top
+quit .
+"not reached" say .

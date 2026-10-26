@@ -74,12 +74,24 @@ KERNEL = {
 EXT = {"size": "Size", "at": "At", "compare": "Compare", "name": "Name", "body": "Body",
        "intern": "Intern", "strtol": "Strtol", "format": "Format"}
 
+#: Joy's I/O words, each ext's ``Io n``, n its place here: the kernel stops
+#: the run at one with ``RIO``, and the host answers (``skilark.io``).  The
+#: value is the name the readers give the word, as a constructor's
+IO = {"put": "Put", "putch": "Putch", "putchars": "Putchars", "get": "Get",
+      "argc": "Argc", "argv": "Argv", "getenv": "Getenv", "clock": "Clock",
+      "abort": "Abort", "quit": "Quit"}
+
+#: an I/O word's ``Io`` number
+IO_CODES = {name: i for i, name in enumerate(IO)}
+
 #: the words only the interpreted form has: intern needs every Joy word's
-#: name at run time, and the compiled form's symbols are the program's own
-INTERPRETED_ONLY = {"intern"}
+#: name at run time, and the compiled form's symbols are the program's own;
+#: an I/O word stops a run with the rest of its program, which only the
+#: interpreted form has as a datum
+INTERPRETED_ONLY = {"intern"} | set(IO)
 
 #: a kernel symbol's Joy name, by its constructor
-NAMES = {v: k for k, v in {**KERNEL, **EXT}.items() if not v.startswith("(")}
+NAMES = {v: k for k, v in {**KERNEL, **EXT, **IO}.items() if not v.startswith("(")}
 
 #: ``ifz``, the Scott eliminator of a natural (``n [Z] [S] ifz``: Z at 0,
 #: else S with n - 1 pushed), is not Joy and has left the kernel; the
@@ -565,7 +577,7 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
             else:
                 out.extend(body)
         elif (isinstance(t, str) and t not in KERNEL and t not in COMPILED_ONLY
-              and t not in EXT and t not in keep):
+              and t not in EXT and t not in IO and t not in keep):
             raise ValueError(f"unknown word {t!r}")
         else:
             out.append(t)
@@ -736,6 +748,15 @@ def _kernel() -> str:
     return (DIR / "kernel.ascii.ski").read_text(encoding="utf-8")
 
 
+def io_names() -> str:
+    """``ioName``, an I/O word's name by its ``Io`` number, for name: each
+    case binds ``m`` to the number less one."""
+    out = "TNil"
+    for name in reversed(list(IO)):
+        out = f"m |> {{ Zero {name_text(name)}; Suc m ({out}) }}"
+    return f"\n-- an I/O word's name, by its number (skilark.joy.IO)\nioName m = {out}\n"
+
+
 def _programs(programs: Dict[str, str], defs: Dict[str, str],
               keep: Iterable[str] = ()) -> Dict[str, Program]:
     return {name: expand(parse(src), defs, keep) for name, src in programs.items()}
@@ -817,6 +838,8 @@ def datum(prog: Program, basis: bool = False) -> str:
         return f"Then {KERNEL[t]} ({rest})"
     if t in EXT and not basis:
         return f"Then (Ext {EXT[t]}) ({rest})"
+    if t in IO and not basis:
+        return f"Then (Ext (Io {nat(IO_CODES[t])})) ({rest})"
     return f"cat ?^/{t} ({rest})"
 
 
@@ -874,14 +897,15 @@ def intern_table(programs: Iterable[Program], defs: Dict[str, str]) -> str:
     numtext = (_numtext_interpreted() if _walk(programs, lambda t: t in ("strtol", "format"))
                else "strtolP ex q t a = RErr\nformatP ex q t a = RErr\n")
     if not _walk(programs, lambda t: t in ("name", "intern")):
-        return numtext + "nameP ex q t a = RErr\ninternP ex q t a = RErr\n"
-    names = numtext + (DIR / "names.ascii.ski").read_text(encoding="utf-8")
+        return numtext + "nameP ex q t a = RErr\ninternP ex q t a = RErr\nioName m = TNil\n"
+    names = numtext + (DIR / "names.ascii.ski").read_text(encoding="utf-8") + io_names()
     if not _walk(programs, lambda t: t == "intern"):
         return names + f"internW n = {miss}\n"
     kdefs = kernel_defs(defs)
     words = {k: v for k, v in KERNEL.items() if not v.startswith("(")}
     entries = [(nm, w) for nm, w in sorted(words.items())]
     entries += [(nm, f"(Ext {c})") for nm, c in sorted(EXT.items())]
+    entries += [(nm, f"(Ext (Io {nat(IO_CODES[nm])}))") for nm in sorted(IO)]
     for nm in sorted(kdefs):
         body = datum(expand(parse(kdefs[nm]), kdefs))
         named = "User" if is_user(nm, kdefs) else "Named"
@@ -1609,9 +1633,12 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
     (under ``applyU``)."""
     progs = _programs(programs, defs)
     progs = _programs(programs, plain(progs.values(), defs))
-    if _walk(list(progs.values()), lambda t: t in INTERPRETED_ONLY):
+    if _walk(list(progs.values()), lambda t: t == "intern"):
         raise ValueError("intern is the interpreted form's alone: its table holds every Joy "
                          "word, and the compiled form's symbols are the program's own")
+    if _walk(list(progs.values()), lambda t: t in IO):
+        raise ValueError("I/O words are the interpreted form's alone: a run stops at one "
+                         "with the rest of its program, which only that form holds as a datum")
     named = _walk(list(progs.values()), lambda t: t == "name")
     bodied = _walk(list(progs.values()), lambda t: t == "body")
     user_bodies: Dict[str, Program] = {}
@@ -1750,27 +1777,29 @@ _LEVEL1_READER = """
 -- booleans, K for yes and K I for no, which are atoms alone; the other
 -- outcomes are S applied to atoms.
 eqNat a b = a |> {{ Zero (b |> {{ Zero K; Suc n (K I) }}); Suc m (b |> {{ Zero (K I); Suc n (eqNat m n) }}) }}
-topIs v r = r |> {{ RVal s (s |> {{ Empty (S S); Push a t (a |> {{ Num n {TEST}; Quot q (S K K){LC} }}) }}); RErr (S K); RTime (S I) }}
+topIs v r = r |> {{ RVal s (s |> {{ Empty (S S); Push a t (a |> {{ Num n {TEST}; Quot q (S K K){LC} }}) }}); RErr (S K); RTime (S I){IO} }}
 """
 
 
 def level1_reader(truth: bool, signs: bool, lists: bool = False, text: bool = False,
-                  sets: bool = False) -> str:
+                  sets: bool = False, io: bool = False) -> str:
     """The level-1 reader for a kernel whose items include truth values
     when ``truth`` (a truth value on top answers ``S S K``), whose numbers
     are integers when ``signs`` (a negative is not the natural asked for),
     whose items include symbols when ``lists`` (``S S I``), characters
     and strings when ``text`` (``S K S`` and ``S S S``), and sets when
-    ``sets`` (``S I K``)."""
+    ``sets`` (``S I K``); and, for the interpreted kernel's ``result``
+    (``io``), a run stopped at an I/O word, which level 1 has no host to
+    answer, as an error."""
     test = "(n |> {{ Pos m (eqNat m v); Neg m (K I) }})" if signs else "(eqNat n v)"
     lc = (("; Logical b (S S K)" if truth else "") + ("; Sym y (S S I)" if lists else "")
           + ("; Char c (S K S); Str z (S S S)" if text else "") + ("; Set z (S I K)" if sets else ""))
-    return _LEVEL1_READER.format(LC=lc, TEST=test.format())
+    return _LEVEL1_READER.format(LC=lc, TEST=test.format(), IO="; RIO o z p (S K)" if io else "")
 
 
 #: the reader for the interpreted kernel: truth values, integers, symbols,
 #: characters, strings and sets
-LEVEL1_READER = level1_reader(True, True, True, True, True)
+LEVEL1_READER = level1_reader(True, True, True, True, True, True)
 
 
 def level1(programs: Dict[str, str], namespace: Sequence[str],
@@ -1823,7 +1852,7 @@ def level1(programs: Dict[str, str], namespace: Sequence[str],
         kernel += intern_table(list(progs.values()) + [expand(parse(defs[n]), defs) for n in keep], defs)
     out = [kernel, "\n".join(hoisted) + ("\n" if hoisted else ""),
            LEVEL1_KERNEL.format(SEGS=" | ".join(segment(n) for n in keep)),
-           level1_reader(truth, signs, lists, text, sets),
+           level1_reader(truth, signs, lists, text, sets, form == "interpreted"),
            "\ndict := ns{" + ", ".join(f"/{n} => <{v}>" for n, v in facts.items()) + "}\n",
            f"\n-- programs, from skilark.joy.level1 ({form} form)\n"]
     for name, run in runs.items():

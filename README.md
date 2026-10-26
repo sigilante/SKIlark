@@ -25,7 +25,10 @@ namespace.
   cond case split some all equal treerec` and their kin, PLAN.md §3,
   stage 7), and `div pick condlinrec condnestrec casting`, with `compare`
   a kernel word (stage 9), `name body intern` (stage 10; `intern` in
-  the interpreted form alone) and `strtol format` (stage 11); run by a
+  the interpreted form alone), `strtol format` (stage 11), and the I/O
+  words `put putch putchars get argc argv getenv clock abort quit`
+  (stage 14, the interpreted form's), which stop the run for the host
+  to answer (`skilark/io.py`); run by a
   fold over the program (`exec`, one unit of
   fuel per word, the fuel the Church numeral 10,000; `execU`, no fuel).
   SKIlark grows toward Joy in full, in stages (`PLAN.md` §3), and Joy's
@@ -35,8 +38,9 @@ namespace.
   `treerec`'s and `treegenrec`'s C see a quotation, not the reference's
   own word). `word` has 30 constructors,
   under Avon's cap of 32 arguments (`PLAN.md` §3, stage 6); the last,
-  `Ext ext`, holds the kernel's further words, `size` and `at` so far,
-  in a sum of their own (§3, stage 8).
+  `Ext ext`, holds the kernel's further words, `size at compare name
+  body intern strtol format` and the I/O words, in a sum of their own
+  (§3, stage 8).
   `basis.ascii.ski` is the basis alone, with
   SKIlark's own `ifz`, as phase 3 measured it.
 - `skilark/programs/joy.{ascii,unicode}.ski` — the kernel with a
@@ -47,6 +51,14 @@ namespace.
   quotations defunctionalized, no interpreter present), and *level 1*
   (either form under SKIjack's blocking interpreter `wfN`, with
   definitions in a namespace read by scry).
+- `skilark/io.py` — the host of the I/O words. An I/O word ends a run
+  as `RIO`, holding the word, the stack and the rest of the program; the
+  host does what the word does and runs the rest. `Host` answers from a
+  given world (input, arguments, environment, clock), as the tests do;
+  `live()` from this process's, as `python -m skilark` does:
+
+      $ echo '"joy"' | python -m skilark '"name? " putchars get put'
+      name? "joy"
 - `skilark/zk.py` — predicates in zero knowledge: a Joy program as the
   verifier of a predicate over literal bits, which lean-ski's composed
   circuit proves. `split` adds two hidden bit strings and compares the sum

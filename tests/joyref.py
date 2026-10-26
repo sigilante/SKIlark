@@ -5,7 +5,10 @@ the maintained descendant of von Thun's joy1.  Each builtin below follows
 its C source (``src/<name>.c`` and the macros of ``runtime.h``), cited by
 file; the comments say where the reference's checks fall.  It covers the
 types SKIlark has: integers, truth values, characters, strings, sets,
-lists and symbols.  Floats, files and the other words are not modelled, and
+lists and symbols, and the I/O words SKIlark has (``skilark.joy.IO``),
+over a world, ``skilark.io.Host``: its input, arguments, environment and
+clock, and its output, which ``put`` and its kin write to.  Floats, files
+and the other words are not modelled, and
 neither are two artefacts of the reference's C strings: a string ends at
 a character 0, and its characters above 127 read back negative where C's
 ``char`` is signed.
@@ -21,7 +24,8 @@ Values are tagged tuples:
     ("S", name)     a symbol: a word inside a quotation
 
 A run returns ``("RVal", stack)``, the stack bottom first, or
-``("RErr", None)`` for any of the reference's ``execerror`` calls.
+``("RErr", None)`` for any of the reference's ``execerror`` calls, or
+``("RAbort", None)`` and ``("RQuit", None)`` for ``abort`` and ``quit``.
 """
 
 from __future__ import annotations
@@ -34,6 +38,14 @@ Stack = List[Value]
 
 class JoyError(Exception):
     """The reference's ``execerror``: the run stops with an error."""
+
+
+class Abort(Exception):
+    """abort.c: the run ends and the main cycle reads on, the stack kept."""
+
+
+class Quit(Exception):
+    """quit.c: out of Joy."""
 
 
 class Undefined(Exception):
@@ -276,9 +288,12 @@ class Joy:
     user definitions (``name == body``), run by name and quoted as
     symbols, as the reference's ``USR_`` words are."""
 
-    def __init__(self, defs: Optional[Dict[str, str]] = None, steps: int = 200_000):
+    def __init__(self, defs: Optional[Dict[str, str]] = None, steps: int = 200_000,
+                 host=None):
+        from skilark.io import Host
         self.defs = {k: parse(v) for k, v in (defs or {}).items()}
         self.steps = steps
+        self.host = Host() if host is None else host
         self.b: Dict[str, Callable[[Stack], None]] = {}
         for name in dir(self):
             if name.startswith("w_"):
@@ -293,14 +308,23 @@ class Joy:
                          else ("S", t) for t in parse(text)])
         except JoyError:
             return ("RErr", None)
+        except Abort:
+            return ("RAbort", None)
+        except Quit:
+            return ("RQuit", None)
         return ("RVal", s)
 
     def run_file(self, text: str) -> List[str]:
+        """The lines ``run_text`` writes."""
+        return self.run_text(text).splitlines()
+
+    def run_text(self, text: str) -> str:
         """A Joy file, as main.c runs it: each term on the stack the terms
         before it left, then print.c's autoput 1, the top written and
-        popped; ``run time error`` where a term errs."""
+        popped; ``run time error`` where a term errs, the stack as the
+        error left it; after ``abort`` the next term, and after ``quit``
+        nothing.  What the I/O words write comes in order with the lines."""
         from skilark import joyfile
-        lines: List[str] = []
         s: Stack = []
         for kind, item in joyfile.read(text):
             if kind == "define":
@@ -310,11 +334,15 @@ class Joy:
                 self.exe(s, [literal(t) if not isinstance(t, str) or t in ("true", "false")
                              else ("S", t) for t in parse(item)])
             except JoyError:
-                lines.append("run time error")
+                self.host.write("run time error\n")
                 continue
+            except Abort:
+                continue
+            except Quit:
+                break
             if s:
-                lines.append(joyfile.write(s.pop()))
-        return lines
+                self.host.write(joyfile.write(s.pop()) + "\n")
+        return self.host.text()
 
     def exe(self, s: Stack, prog) -> None:
         """``exeterm``: push each literal, run each symbol."""
@@ -1359,6 +1387,61 @@ class Joy:
         v = s.pop()
         n = int(v[1]) if v[0] == "B" else v[1]
         s.append(("T", tuple(ord(c) for c in c_format(n, chr(spec), width, prec))))
+
+    # -- I/O, over self.host's world
+
+    def w_put(self, s):                 # put.c: writefactor
+        from skilark import joyfile
+        self.params(s, 1); self.host.write(joyfile.write(s.pop()))
+
+    def w_putch(self, s):               # putch.c: NUMERICTYPE, printf %c
+        self.params(s, 1)
+        if s[-1][0] not in ("N", "C"):
+            raise JoyError("numeric")
+        self.host.write(chr(s.pop()[1] & 0xFF))
+
+    def w_putchars(self, s):            # putchars.c: STRING, printf %s
+        self.params(s, 1)
+        if s[-1][0] != "T":
+            raise JoyError("string")
+        self.host.write("".join(map(chr, s.pop()[1])))
+
+    def w_get(self, s):                 # get.c: readfactor
+        from skilark.io import factor_end
+        h = self.host
+        text, i = h.stdin, h.at
+        while i < len(text) and text[i].isspace():
+            i += 1
+        if i >= len(text):
+            raise JoyError("get at the end of the input")
+        j = factor_end(text, i)
+        h.at = j
+        toks = parse(text[i:j])
+        if len(toks) != 1:
+            raise JoyError("get: not one factor")
+        s.append(literal(toks[0]))
+
+    def w_argc(self, s):                # argc.c
+        s.append(("N", len(self.host.argv)))
+
+    def w_argv(self, s):                # argv.c
+        s.append(("L", tuple(("T", tuple(map(ord, a))) for a in self.host.argv)))
+
+    def w_getenv(self, s):              # getenv.c: "" when unset
+        self.params(s, 1)
+        if s[-1][0] != "T":
+            raise JoyError("string")
+        value = self.host.env.get("".join(map(chr, s.pop()[1])), "")
+        s.append(("T", tuple(map(ord, value))))
+
+    def w_clock(self, s):               # clock.c: CPU milliseconds
+        s.append(("N", int(self.host.clock())))
+
+    def w_abort(self, s):               # abort.c
+        raise Abort()
+
+    def w_quit(self, s):                # quit.c
+        raise Quit()
 
     # -- SKIlark's own kernel words, from Kerby's basis: not Joy's, so the
     #    reference has them as definitions; these are what they define
