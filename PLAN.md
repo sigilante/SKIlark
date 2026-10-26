@@ -1168,63 +1168,100 @@ by 25 to 84 contractions each (median 28, at most 2.7%), and the level-1
 reader's 11 by 8,459 to 13,986, its `topIs` matching `RIO` too. No
 outcome changes, and no compiled pin moves.
 
-*Stage 15, planned: I/O through drivers (decided 2026-10-26; Avon's
-`DESIGN.md` §9.2, SKIjack's `RUNTIME-DESIGN.md` §3e).* Stage 14's host is
-SKIlark's own and speaks only `RIO`. Under the proposal, a runtime
-performs standard cards (write, read, environment, clock, exit), and
-SKIlark runs as a kernel that emits them. The words keep stage 14's
-behaviour, and the reference model still checks it. What moves is who
-does the Joy work: printing and parsing move from Python into the kernel.
+*Stage 15: I/O through drivers (2026-10-27; `skilark/door.py`,
+`tests/test_door.py`; Avon's `DESIGN.md` §9.2, SKIjack's
+`RUNTIME-DESIGN.md` §3e).* Stage 14's host is SKIlark's own and speaks
+only `RIO`. A door makes a program, or a whole Joy file, a kernel that
+emits drivers' cards instead, and a runtime with drivers performs them:
+SKIjack's reference drivers in Python, or `avon run --kernel`. Neither
+learns Joy. Printing and parsing move from Python into the kernel; the
+words keep stage 14's behaviour, and stage 14's host checks it.
 
-- *The door.* `skilark.export` gains a pill. Its kernel's state holds the
-  file's terms not yet run, the stack, the arguments, the input not yet
-  consumed and, while a request is out, the stopped `RIO`'s word and
-  `q`.
-  - `poke` takes the start event `[0 [0 [argv bits]]]`, or a reply, and
-    runs until it needs an answer it does not hold. It then returns the
-    cards gathered so far and itself.
+- *The door* is `[[poke [peek load]] [e [q [s f]]]]`.
+  - `e` is `[argv [input eof]]`: the arguments as byte lists, the input
+    read and not yet consumed, and whether the input has ended. `q` and
+    `s` are the run to resume. `f` is the run's context: a program alone,
+    or a file's term with the terms after it and the stack it began on.
+  - `poke` takes boot's reply `[0 [0 [argv bits]]]`, or a reply, and runs
+    until it needs an answer it does not hold. It returns the cards
+    gathered so far and itself.
   - `RIO` stays the protocol between `exec` and the door, so stage 14's
-    words and pins stand. The door is `skilark.io`'s `Host`, written in
-    SKI, with no world inside.
+    words and pins stand.
 - *The words, as cards:*
   - `put putch putchars`: a write card `[1 [1 bytes]]`, then run on in
-    the same poke, since a write needs no reply.
-  - `get`: a factor from the input held, or a read card
-    `[2 [id [0 4096]]]` when the input holds none whole.
-  - `argc argv`: from the state, which the start event filled.
-  - `getenv`: card 3. `clock`: card 4, which answers the run's step
+    the same poke.
+  - `get`: a factor from the input held, or a read card `[2 [3 [0 256]]]`
+    when the input holds none whole. 256, not 4096: a numeral literal is
+    a Scott chain in the kernel, 16 nodes a unit, and 256 is one the
+    writer holds already. A factor is whole when the scan ends before the
+    input does, or the input has ended.
+  - `argc argv`: from the state, which boot's reply filled.
+  - `getenv`: card 3, id 1. `clock`: card 4, id 2, which answers the step
     count, not time, until binary numerals.
-  - `abort`: the next term on the stack it leaves, with no card.
-  - `quit`, and the end of the file: the exit card `[5 0]`.
-  - A file's `.` prints its top with `put`'s writer, as `joyfile` does.
-- *The writer,* for `put`, prints every value `joyfile.write` prints:
-  integers, truth values, characters, strings with their escapes, sets,
-  lists and symbols. It builds on stage 11's number text and `name`'s
-  table.
-- *The reader,* for `get`, finds a factor where `scan.c` and `factor_end`
-  find one, then reads it: `strtol` for a number, `intern`'s table for a
-  word, and the escapes for characters and strings. It is the largest new
-  piece, and the last.
-- *Tests.*
-  - Each stage-14 program and `examples/io.joy` must give the same output
-    through the door, in the same world, under SKIjack's reference
-    drivers in Python.
-  - The model checks outcomes as now.
-  - `avon run --kernel` must print `examples/io.out` byte for byte.
-    A SKIlark program without I/O stays a plain term, run by
-    `avon run` or `avon reduce`, as now.
-  - The words' pins stay; the door gets pins of its own.
+  - `abort`: a program exits 0; a file's term ends with its stack kept.
+  - `quit`, and the end of a file: the exit card `[5 0]`. A program's
+    error exits 1; a file's prints `run time error` and runs the next
+    term on the stack the erring term began on, as `joyfile` does.
+  - A file's `.` prints its top with `put`'s writer and a newline.
+- *The writer* prints what `joyfile.write` prints: integers, truth values,
+  characters and strings with `write.c`'s escapes, sets, lists and
+  symbols, a symbol by `nameOf`. The door's kernel names the I/O words for
+  `nameOf` (`joy.interpreted(..., io_named=True)`), since a quotation it
+  writes may hold `get`.
+- *The reader* finds a factor where `io.factor_end` does, then reads it as
+  `joy.parse` does: digits, or a minus and digits, for a number; `true`
+  and `false`; Joy's own words by a binary search over their bytes; any
+  other word as an undefined symbol, as `Run.word_term` makes one; the
+  escapes for characters and strings; lists and sets nested. A factor it
+  refuses is consumed, and the word errs, as stage 14's host does.
+- *Strictness.* A runtime reads a card in bounded probes, and Avon's
+  probes run in copy mode, which shares nothing. So the door leaves no
+  work for them:
+  - each poke's weak head normal form is the run to its stop, every
+    result pair applied to its continuation;
+  - a card's bytes are data, the list and each numeral rebuilt before the
+    card goes out. Left as thunks, `"joy" [ord 32 -] map` was recomputed
+    for every byte it wrote and passed the 10⁶-step probe bound, and the
+    card passed through unwritten;
+  - the input held is rebuilt when a read's bytes join it, and a number
+    read or written is rebuilt digit by digit. Left lazy, a three-digit
+    number cost more than 3×10⁹ copy-mode contractions, its numeral
+    redone at each of its uses.
+- *Tests* (`tests/test_door.py`):
+  - On `avon run --kernel`, copy and share: every stage-14 program, and
+    each but `clock` again with `stack put` after it, so what `get` read
+    shows, writes what stage 14's host writes and ends as it ends (94
+    runs; `clock` answers the step count here and 12 in stage 14's); a
+    file of the reader's hard cases and a file whose factors cross the
+    256-byte reads print what `joyfile.run_text` prints; and, slow for
+    compiling a door a file, every example prints its `.out`.
+  - Under SKIjack's reference drivers: nine cheap programs, with their
+    pokes and contractions pinned. The reference reads each byte as a
+    unary numeral a successor at a time, so a program that writes a list
+    or reads a factor takes 90 seconds there, and runs on Avon instead.
+  - A SKIlark program without I/O stays a plain term, run by `avon run`
+    or `avon reduce`.
+- *Costs.* Each I/O stop costs about 19,000 contractions before the
+  word's own work: `quit 1` costs 20,135 through the door and 1,075 under
+  stage 14's host. Bracket abstraction routes `doorIo`'s and `doorGo`'s
+  five arguments through bodies that hold all ten words; a dispatch tree
+  and fewer arguments would cut it. `put` of `[1 [2] "c" 'd {3} dup]`
+  costs 616,244, most of it unary numerals rebuilt and compared. Copy
+  mode's numerals are unary throughout: forty numbers near 900 read and
+  written in one poke pass Avon's default fuel of 10⁸, and run in 2.2
+  seconds with `--fuel=1000000000`. Share mode's words hold numerals
+  natively, and jets can license the writer and reader later.
 - *The compiled form* still refuses I/O. It has no datum continuation to
   keep in the door's state.
-- *Order:* (a) the door, with writes, arguments, the environment, the
-  clock, `abort`, `quit` and the exit; (b) files in the door; (c) `get`
-  and the reader. Each is its own pull request, after SKIjack's
-  reference drivers.
-- *Risks:* the writer and the reader cost contractions that Python spends
-  outside the run today. In copy mode the reader's scanning could dominate
-  a program that reads much. Share mode's list and numeral words should
-  hold the bytes natively, and jets can license the writer later. No
-  figure exists yet: measuring (a) gives the first.
+- *Bytes, not text.* A code past 255 is written modulo 256, and the
+  reader's spaces are Python's ASCII ones, 9 to 13 and 28 to 32, where C's
+  `isspace` has 9 to 13 and 32.
+- *File words, later* (decided 2026-10-27). Joy's `fopen`, `fwrite` and
+  kin need new cards and descriptors past 2, a change to SKIjack's
+  `SPEC.md` §4.1 and Avon's `DESIGN.md` §9.2. The driver confines them:
+  `avon run --kernel --dir=ROOT` resolves every path under ROOT and
+  refuses `..` and absolute paths, and without `--dir` a kernel opens
+  nothing, as today. A refused open answers an error the kernel can test.
 - *The stage-14 host stays* as the reference's world in tests, and as the
   command line's path for a reducer that is not a driver runtime.
 

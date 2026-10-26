@@ -22,11 +22,11 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Avon is pinned to the commit that runs the list operations natively;
-# skijack 0.2.3, from PyPI, has the reducer switch and those operations.
-# Every job runs a test a core (pytest-xdist).
+# Avon is pinned to the commit with drivers, `avon run --kernel`, which
+# the door's tests run; skijack 0.2.5, from PyPI, has the reference
+# drivers.  Every job runs a test a core (pytest-xdist).
 env:
-  AVON_REF: 6d346e5462dbcc137ffbcf3150c30ab490fd5e0b      # sigilante/avon #74, list words
+  AVON_REF: 251ab60206a8edd1f690f0dbeea64803b30fc86b      # sigilante/avon #78, drivers
 
 jobs:
   # The suite on each Python, its reductions on Avon, which the reference

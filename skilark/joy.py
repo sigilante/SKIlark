@@ -885,9 +885,11 @@ def kernel_defs(defs: Dict[str, str]) -> Dict[str, str]:
     return {k: v for k, v in defs.items() if not (k in EXT and v == DEFINITIONS[k])}
 
 
-def intern_table(programs: Iterable[Program], defs: Dict[str, str]) -> str:
+def intern_table(programs: Iterable[Program], defs: Dict[str, str],
+                 io_named: bool = False) -> str:
     """name's and intern's words (``programs/names.ascii.ski``) for a
-    program set that names or interns, else refusals no word reaches; and
+    program set that names or interns, else refusals no word reaches, and
+    ``ioName`` as ``nameOf`` needs it, empty unless ``io_named``; and
     ``internW``, intern's table: a name's word, in the kernel's code, for
     every word Joy has and every definition ``defs`` adds; any other name a
     user definition with no body, as the reference's undefined symbol.
@@ -897,7 +899,8 @@ def intern_table(programs: Iterable[Program], defs: Dict[str, str]) -> str:
     numtext = (_numtext_interpreted() if _walk(programs, lambda t: t in ("strtol", "format"))
                else "strtolP ex q t a = RErr\nformatP ex q t a = RErr\n")
     if not _walk(programs, lambda t: t in ("name", "intern")):
-        return numtext + "nameP ex q t a = RErr\ninternP ex q t a = RErr\nioName m = TNil\n"
+        return (numtext + "nameP ex q t a = RErr\ninternP ex q t a = RErr\n"
+                + (io_names() if io_named else "ioName m = TNil\n"))
     names = numtext + (DIR / "names.ascii.ski").read_text(encoding="utf-8") + io_names()
     if not _walk(programs, lambda t: t == "intern"):
         return names + f"internW n = {miss}\n"
@@ -932,12 +935,13 @@ def intern_table(programs: Iterable[Program], defs: Dict[str, str]) -> str:
     return names + "".join(f"{ln}\n" for ln in lines)
 
 
-def interpreted(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
-                ) -> str:
+def interpreted(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS,
+                io_named: bool = False) -> str:
     """The kernel plus, for each program ``p``: ``pP``, ``rP`` (fuelled)
-    and ``uP`` (unfuelled), and intern's table."""
+    and ``uP`` (unfuelled), and intern's table; ``io_named`` names the I/O
+    words for ``nameOf`` even where no program names (``skilark.door``)."""
     progs = _programs(programs, kernel_defs(defs))
-    out = [_kernel(), intern_table(progs.values(), defs), "\n-- programs, from skilark.joy.interpreted\n"]
+    out = [_kernel(), intern_table(progs.values(), defs, io_named), "\n-- programs, from skilark.joy.interpreted\n"]
     for name, prog in progs.items():
         out.extend(f"{line}\n" for line in spill(f"p{name}", [], datum(prog)))
         out.append(f"r{name} := exec fuel p{name} Empty\n")
