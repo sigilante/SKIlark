@@ -59,6 +59,18 @@ namespace.
 
       $ echo '"joy"' | python -m skilark '"name? " putchars get put'
       name? "joy"
+- `skilark/door.py` — the I/O words through drivers (stage 15). A door
+  makes a program or a Joy file a kernel whose I/O words are drivers'
+  cards (write, read, environment, step count, exit), and a runtime with
+  drivers performs them: SKIjack's reference drivers, or `avon run
+  --kernel`. `put`'s writer and `get`'s reader are SKI, in the door.
+  `python -m skilark.door` writes a file's door for Avon:
+
+      $ python -m skilark.door examples/hello.joy > joy
+      $ avon run --kernel -- joy
+      5
+      "hello, world"
+      [1 4 9]
 - `skilark/zk.py` — predicates in zero knowledge: a Joy program as the
   verifier of a predicate over literal bits, which lean-ski's composed
   circuit proves. `split` adds two hidden bit strings and compares the sum
