@@ -104,8 +104,8 @@ python -m skilark '"abc" [succ] map'      # "bcd"
 
 ```
 $ python -m skilark "3 [dup +] i"
-interpreted  unfuelled      5,050  6
-interpreted  fuelled        5,039  6
+interpreted  unfuelled      5,056  6
+interpreted  fuelled        5,052  6
 compiled     unfuelled        428  6
 compiled     fuelled          442  6
 ```
@@ -125,7 +125,7 @@ SKIJACK_REDUCER=avon python -m pytest -q -n auto --runslow  # the suite, on Avon
 Avon runs in its copy mode, the reference host's algorithm, so every
 contraction count above, and every one the tests pin, is the same on both.
 The reducer switch is SKIjack's (`SKIJACK_REDUCER`), from skijack 0.2.1;
-SKIlark requires 0.2.3. CI runs the suite on Avon on each Python. On each
+SKIlark requires 0.2.6. CI runs the suite on Avon on each Python. On each
 push to master, and on a pull request labelled `reference`, it also runs the
 suite with every reduction checked against aviary (`SKIJACK_REDUCER=check`).
 
