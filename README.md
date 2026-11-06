@@ -34,10 +34,12 @@ namespace.
   SKIlark grows toward Joy in full, in stages (`PLAN.md` §3), and Joy's
   behaviour is the reference implementation's: `tests/joyref.py` models
   it, and the tests check every pinned outcome against the model, but
-  for three deviations pinned with their reason (`genrec`'s R2 and
+  for four deviations pinned with their reason (`genrec`'s R2 and
   `treerec`'s and `treegenrec`'s C see a quotation, not the reference's
-  own word). `word` has 30 constructors,
-  under Avon's cap of 32 arguments (`PLAN.md` §3, stage 6); the last,
+  own word; and after an error SKIlark runs on the stack the erring term
+  began with, where the reference keeps the stack as the error left it,
+  `PLAN.md` §3, stage 14). `word` has 30 of the 31 constructors Avon's
+  cap of 32 arguments allows (`PLAN.md` §3, stage 6); the last,
   `Ext ext`, holds the kernel's further words, `size at compare name
   body intern strtol format` and the I/O words, in a sum of their own
   (§3, stage 8).
@@ -125,7 +127,7 @@ SKIJACK_REDUCER=avon python -m pytest -q -n auto --runslow  # the suite, on Avon
 Avon runs in its copy mode, the reference host's algorithm, so every
 contraction count above, and every one the tests pin, is the same on both.
 The reducer switch is SKIjack's (`SKIJACK_REDUCER`), from skijack 0.2.1;
-SKIlark requires 0.2.6. CI runs the suite on Avon on each Python. On each
+SKIlark requires skijack 0.2.6. CI runs the suite on Avon on each Python. On each
 push to master, and on a pull request labelled `reference`, it also runs the
 suite with every reduction checked against aviary (`SKIJACK_REDUCER=check`).
 
