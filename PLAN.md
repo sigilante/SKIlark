@@ -1,22 +1,31 @@
 # SKIlark: Joy on SKIjack
 
-> **Status (2026-10-24).** Phases 1–3 built; predicates in zero
-> knowledge (§3) built; Joy in full under way, stages 1 to 7 built
-> (arithmetic and comparison on signed integers, truth values, `branch`,
+> **Status (2026-11-07, 0.10.0).** Phases 1–3 built; predicates in
+> zero knowledge (§3) built; Joy in full built in fifteen stages (§3):
+> arithmetic and comparison on signed integers, truth values, `branch`,
 > `ifte`, quotations as lists with words as symbols, the stack as data,
 > the recursion combinators, characters, strings and sets, `typeof` and
-> the type tests; `ifz` retired), every word checked against the
-> reference implementation (§3, stage 4), with one deviation left
-> (`genrec`). `word` has 30 constructors, under Avon's cap of 32
-> arguments: stage 6 merged the literals to make room (§3, stage 6), and
-> stage 8 puts further kernel words in `ext`, a sum of their own.
-> `skilark/programs/` holds the kernel, the basis kernel phase 3 measured
-> and the phase-1 programs; `skilark/joy.py` is the front end in three
-> forms; `skilark/variants.py` is the basis kernel's loop and fuel in
-> variants; `tests/` pins every number in §1 and §3 (the level-1 runs
-> under `--runslow`). Phase 3 closed with a decision on `Do` and one on
-> fuel, and the kernel's fuel is now a Church numeral; Phase 4 is a short
-> write-up.
+> the type tests (stages 1–6), the library words (7), the kernel's
+> further words in `ext` (8), the pure words left (9), symbols and their
+> names (10), numbers to and from text (11), Joy files and examples
+> (12), the SKI underneath (13), I/O (14), and I/O through drivers, run
+> under SKIjack's reference drivers or `avon run --kernel` (15).  Every
+> word is checked against the reference implementation (`tests/joyref.py`),
+> with four deviations pinned with their reason: `genrec`'s R2 and
+> `treerec`'s and `treegenrec`'s C see a quotation, not the reference's
+> own word, and after an error SKIlark runs on the stack the erring term
+> began with, where the reference keeps the stack as the error left it
+> (stage 14).  `word` has 30 of the 31 constructors Avon's cap of 32
+> arguments allows; `ext`, a sum of its own, holds the kernel's further
+> words.  The file words (`fopen fwrite` and their kin) are decided for
+> later (§3, stage 15).  `skilark/programs/` holds the kernel, the basis kernel phase 3
+> measured and the phase-1 programs; `skilark/joy.py` is the front end in
+> three forms; `skilark/door.py` is the I/O words through drivers;
+> `tests/` pins every number in §1 and §3 (the level-1 runs under
+> `--runslow`).  Phase 4, a short write-up, remains.  Next, 0.11.0: the
+> reference's own tests (Wodan58/Joy `test2/`, at the commit `joyref.py`
+> models) adopted as a conformance suite, and the language adjustments
+> they call for.
 > Where this document and the tests differ, the tests are authoritative.
 
 *A concatenative language in the line of Joy (von Thun) and Kerby's* Theory
@@ -1288,7 +1297,7 @@ words keep stage 14's behaviour, and stage 14's host checks it.
   sum, take 32: the cap. Stage 3 made room by deriving seven words,
   stage 4 derived its thirteen combinators, and stage 6 merged the five
   literals into one, leaving `word` at 28 constructors with `typeof`
-  (§3, stage 6).
+  (§3, stage 6; 30 after stage 8).
   That is the
   intended story and the write-up says so before a reviewer does.
 - **`I` and `Cons` are reserved.** Joy's `i` is `Do`, its `cons` is
