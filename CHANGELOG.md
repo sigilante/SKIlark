@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased (0.11.0)
+
+- **The reference's own tests** (stage 16, `tests/test_joytest2.py`):
+  Wodan58/Joy's `test2/` copied whole at fe9fa0f with its licence
+  (`tests/joy/`). Every file is run by the model and, on the slow job, by
+  SKIlark, and every known failure is pinned with its reason
+  (`PLAN.md` §3, stage 16).
+
 ## 0.10.0 (2026-11-07)
 
 Joy in full, stages 7 to 15 (`PLAN.md` §3), each pinned by its tests:

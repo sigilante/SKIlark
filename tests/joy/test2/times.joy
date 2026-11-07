@@ -1,0 +1,15 @@
+(*
+    module  : times.joy
+    version : 1.8
+    date    : 08/29/24
+*)
+"numlib" libload.
+
+10 fib 55 =.
+
+1 10 [] times 1 =.
+
+1 0 [succ] times 1 =.
+
+(* error *)
+# 1 -1 [succ] times.

@@ -1,0 +1,33 @@
+(*
+    module  : strftime.joy
+    version : 1.10
+    date    : 01/12/26
+*)
+time gmtime dup putln dup
+"%a\n"	strftime putchars dup	# abbreviated weekday name (e.g., Mon)
+"%A\n"	strftime putchars dup	# full weekday name (e.g. Monday)
+"%w\n"	strftime putchars dup	# weekday number (0 = Sunday)
+"%d\n"	strftime putchars dup	# day of the month (01-31)
+"%b\n"	strftime putchars dup	# abbreviated month name (e.g., Jan)
+"%B\n"	strftime putchars dup	# full month name (e.g., January)
+"%m\n"	strftime putchars dup	# month number (01-12)
+"%y\n"	strftime putchars dup	# year without century (00-99)
+"%Y\n"	strftime putchars dup	# year with century (e.g. 2026)
+"%H\n"	strftime putchars dup	# hour (00-23)
+"%I\n"	strftime putchars dup	# hour (01-12, 12-hour clock)
+"%p\n"	strftime putchars dup	# AM/PM indicator
+"%M\n"	strftime putchars dup	# minutes (00-59)
+"%S\n"	strftime putchars dup	# seconds (00-60, leap second allowed)
+(* The timezone offset is not handled correctly in Joy *)
+"%z\n"	strftime putchars dup	# UTC offset (e.g., +0100)
+"%Z\n"	strftime putchars dup	# time zone name
+"%j\n"	strftime putchars dup	# day of the year (001-366)
+"%U\n"	strftime putchars dup	# week number (sunday as first day of week)
+"%W\n"	strftime putchars dup	# week number (monday as first day of week)
+"%c\n"	strftime putchars dup	# locale's date and time representation
+"%x\n"	strftime putchars dup	# locale's date representation
+"%X\n"	strftime putchars dup	# locale's time representation
+"%%\n"	strftime putchars.	# literal percent sign
+
+(* show-todaynow from inilib.joy, including time zone *)
+time localtime "%A %d-%b-%y %H:%M:%S %Z" strftime putchars newline.
