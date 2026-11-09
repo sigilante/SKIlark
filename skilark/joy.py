@@ -53,6 +53,18 @@ class Def:
     def __repr__(self) -> str:
         return f"Def({self.name!r})"
 
+
+def epoch_name(name: str, epoch: int) -> str:
+    """A file's word in the epoch a redefinition began (``joyfile._terms``):
+    ``test`` in epoch 1 is ``test~1``."""
+    return f"{name}~{epoch}"
+
+
+def plain_name(name: str) -> str:
+    """A word's name as Joy reads it, without its epoch."""
+    return re.sub(r"~\d+$", "", name)
+
+
 DIR = pathlib.Path(__file__).parent / "programs"
 
 #: Joy's kernel words and the constructor (interpreted) each compiles to
@@ -597,7 +609,7 @@ def literal_text(t: Tuple[str, object]) -> str:
 def words(prog: Program) -> str:
     """A program back as Joy text."""
     return " ".join(f"[{words(t)}]" if isinstance(t, list) else
-                    t.name if isinstance(t, Def) else
+                    plain_name(t.name) if isinstance(t, Def) else
                     literal_text(t) if isinstance(t, tuple) else str(t) for t in prog)
 
 
@@ -813,7 +825,7 @@ def datum(prog: Program, basis: bool = False) -> str:
         if basis:                       # the basis kernel has no symbols
             return datum(flatten(t.body) + list(prog[1:]), basis)
         named = "User" if t.user else "Named"
-        return f"Then (Def ({named} {name_text(t.name)} ({datum(t.body)}))) ({rest})"
+        return f"Then (Def ({named} {name_text(plain_name(t.name))} ({datum(t.body)}))) ({rest})"
     if isinstance(t, int):
         if basis and t < 0:
             raise ValueError(f"the basis kernel has no negative numbers: {t}")
@@ -1220,7 +1232,7 @@ class _Lists:
 #: a derived word's symbol: ``Z`` and its name, an operator's characters
 #: spelled out
 _MANGLE = {"!": "Bang", "+": "Plus", "-": "Minus", "*": "Star", "/": "Slash",
-           "<": "Lt", "=": "Eq", ">": "Gt"}
+           "<": "Lt", "=": "Eq", ">": "Gt", "~": "Tilde"}
 
 
 def def_symbol(name: str, user: bool = False) -> str:
@@ -1243,7 +1255,7 @@ def symbol_name(ctor: str) -> str:
                 break
         else:
             out.append(rest[0]); rest = rest[1:]
-    return "".join(out)
+    return plain_name("".join(out))
 
 
 def _compiled_kernel(n: int, truth: bool, signs: bool,

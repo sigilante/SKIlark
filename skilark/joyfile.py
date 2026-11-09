@@ -268,14 +268,39 @@ def run_text(text: str, form: str = "interpreted", host=None) -> str:
 
 
 def _terms(text: str) -> Tuple[Dict[str, str], List[str]]:
+    """The file's definitions and terms, each term to run with the
+    definitions read before it, as the reference's symbol table gives
+    them.  A DEFINE that redefines a word the file defined begins an epoch:
+    from then on every word the file defines is ``joy.epoch_name`` of its
+    name and the epoch, in the terms and in a copy of every definition, so
+    the terms before keep the words they saw."""
     defs: Dict[str, str] = {}
     terms: List[str] = []
+    seen: Dict[str, str] = {}
+    epoch = 0
     for kind, item in read(text):
         if kind == "define":
-            defs.update(item)
+            if seen.keys() & item.keys():
+                epoch += 1
+            seen.update(item)
+            if epoch:
+                defs.update({joy.epoch_name(n, epoch): _in_epoch(b, seen, epoch)
+                             for n, b in seen.items()})
+            else:
+                defs.update(item)
         else:
-            terms.append(item)
+            terms.append(_in_epoch(item, seen, epoch) if epoch else item)
     return defs, terms
+
+
+#: a string, a character, or a word, as the reference's scanner reads them
+_TOKEN = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\\d{1,3}|\\.|.)|[^\s\[\]{}"\']+')
+
+
+def _in_epoch(text: str, names: Dict[str, str], epoch: int) -> str:
+    """``text`` with each word in ``names`` its name in ``epoch``."""
+    return _TOKEN.sub(lambda m: joy.epoch_name(m.group(0), epoch) if m.group(0) in names
+                      else m.group(0), text)
 
 
 def _run_interpreted(text: str, host) -> str:
