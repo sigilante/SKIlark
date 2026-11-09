@@ -1059,7 +1059,8 @@ modelled from its C source:
 
 - `name` (name.c) gives a symbol's nickname, an operator's spelled as
   optable.c spells it (`+` is `"plus"`, `>=` `"geql"`), and a literal's
-  type's name (`5 name` is `"integer type"`).
+  type's name (`5 name` is `" integer type"`, with optable.c's leading
+  space, since stage 16).
 - `body` (body.c) gives a user definition's body as a quotation of its
   symbols; any other symbol has none, and errs.
 - `intern` (intern.c) reads a string as Joy's reader would, a name and
@@ -1335,6 +1336,45 @@ are dropped first, and the library words the files use are defined. Every known 
      expects `false` for `[1 2 3] [] all`. `someall.h` and `get_boolean`
      at fe9fa0f give `true`, as `[1 2 3] [] some` does in `some.joy`.
      Only the reference binary can settle which is right.
+- *Done (2026-11-09).* The model now passes 143 of its 144 runnable
+  files and SKIlark 134; each remaining failure is pinned with its reason.
+  1. The reader refuses a float by name, as scan.c reads one: a number,
+     a full stop and a digit. `1e5` is still the integer 1 and the word
+     `e5`, as the reference reads it.
+  2. An undefined word in a quotation is a user `Def` with no body,
+     which runs as nothing (`undeferror` 0, the reference's default). At
+     the top of a program it is still refused. The model runs an
+     undefined symbol as nothing too. It raises only for a builtin of
+     the reference's (`table.c`) that it lacks, so a gap in the model
+     still shows.
+  3. A DEFINE that redefines one of the file's words begins an epoch.
+     From then on each of the file's words is `name~epoch` in the terms
+     and in a copy of the definitions, so each term sees the definitions
+     read before it, as the reference's symbol table gives them. A quoted
+     word reads back by its plain name. A word of the file's own named
+     like `a~1` would meet an epoch's name. `intern` of a redefined word
+     finds its first definition, and a redefinition of one of Joy's own
+     words still holds for the whole file.
+  4. A quoted user word's `Def` holds its body with its derived words as
+     symbols, so `body` gives it as written. Joy's own words keep their
+     inlined bodies, and no pinned count moves.
+  5. A recursive definition is refused by name (`ack -> ack`). Running
+     one by name stays undecided.
+  6. `name` of a literal has the leading space, in the model, the
+     compiled form's table and the interpreted kernel's `nameText`.
+  7. A literal past 900 either way is refused by name
+     (`joy.MAX_LITERAL`). A literal nests as deep as it is large, and
+     `spill`, which cuts the equations, passes Python's recursion limit
+     near 990. SKIjack's probe reads no numeral deeper than 1,000. `nat`
+     no longer recurses. `123456789` waits on binary numerals.
+  8. The harness leaves out casting.joy's three pointer casts by name
+     (`DEVIATIONS`): a builtin symbol as a function, the integer 0 as a
+     list, and a list as a file. The rest of the file passes in the model,
+     and in SKIlark but for `123456789`.
+  9. Open: `[] all` needs the reference binary.
+  Still pinned: `all2` (9, both), `condlinrec` (5), `condnestrec` (`3 4
+  cnr-ack` in unary runs out of fuel), and the six files with
+  `123456789` (7).
 - *Left out.* The absent words stay absent for 0.11.0. Floats are the
   largest bloc, at 158 terms and 26 whole files; the file words wait on
   stage 15's cards. The harness checks that every word it drops is

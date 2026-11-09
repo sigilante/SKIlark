@@ -38,7 +38,10 @@ namespace.
   `treerec`'s and `treegenrec`'s C see a quotation, not the reference's
   own word; and after an error SKIlark runs on the stack the erring term
   began with, where the reference keeps the stack as the error left it,
-  `PLAN.md` §3, stage 14). `word` has 30 of the 31 constructors Avon's
+  `PLAN.md` §3, stage 14). The reference's own test suite
+  (`tests/joy/`, stage 16) runs too, with the limits it found pinned: no
+  recursive definitions, literals at most 900 either way, and three
+  `casting` pointer reinterpretations left out. `word` has 30 of the 31 constructors Avon's
   cap of 32 arguments allows (`PLAN.md` §3, stage 6); the last,
   `Ext ext`, holds the kernel's further words, `size at compare name
   body intern strtol format` and the I/O words, in a sum of their own

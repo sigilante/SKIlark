@@ -7,6 +7,21 @@
   (`tests/joy/`). Every file is run by the model and, on the slow job, by
   SKIlark, and every known failure is pinned with its reason
   (`PLAN.md` §3, stage 16).
+- **What the reference's tests found** (stage 16, done 2026-11-09):
+  - The reader refuses a float literal by name. It used to read `2.5` as
+    the terms `2` and `5`.
+  - An undefined word in a quotation is the reference's undefined
+    symbol, which runs as nothing. At the top of a program it is still
+    refused.
+  - Each term sees the definitions read before it, so a later `DEFINE`
+    no longer changes the terms before it.
+  - `body` of a user definition gives its body as written.
+  - A recursive definition is refused by name. It used to exhaust
+    Python's recursion limit.
+  - A literal past 900 either way is refused by name
+    (`joy.MAX_LITERAL`), since integers are unary.
+  - `name` of a literal has the reference's leading space (`" integer
+    type"`).
 
 ## 0.10.0 (2026-11-07)
 
