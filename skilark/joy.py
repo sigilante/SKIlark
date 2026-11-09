@@ -551,6 +551,9 @@ def parse(text: str) -> Program:
             t = text[i:j]
             i = j
             if t.isdigit() or (t[0] == "-" and t[1:].isdigit()):
+                if abs(int(t)) > MAX_LITERAL:
+                    raise ValueError(f"a literal past SKIlark's unary numerals: {t} "
+                                     f"(at most {MAX_LITERAL} either way)")
                 stack[-1].append(int(t))
             else:
                 stack[-1].append(t)
@@ -572,26 +575,32 @@ def parse_definitions(text: str) -> Dict[str, str]:
 
 
 def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
-           quoted: bool = False) -> Program:
+           quoted: bool = False, within: Tuple[str, ...] = ()) -> Program:
     """Inline every derived word except those in ``keep``; inside a
     quotation (``quoted``) a derived word is a ``Def`` of its expansion,
     and a word nothing defines is the reference's undefined symbol, a user
     ``Def`` with no body, which runs as nothing (``undeferror`` 0).  At
-    the top, a word nothing defines is refused."""
+    the top, a word nothing defines is refused.  A word whose expansion
+    reaches itself (``within`` holds the words being expanded) is refused
+    by name: SKIlark inlines its words, and the reference runs them by name."""
     keep = set(keep)
     out: Program = []
     for t in prog:
         if isinstance(t, tuple):
             out.append(t)
         elif isinstance(t, list):
-            out.append(expand(t, defs, keep, True))
+            out.append(expand(t, defs, keep, True, within))
         elif isinstance(t, str) and t in defs and t not in keep:
+            if t in within:
+                cycle = " -> ".join(plain_name(w) for w in within[within.index(t):] + (t,))
+                raise ValueError(f"a recursive definition, which SKIlark cannot inline: {cycle}")
+            inner = within + (t,)
             if not quoted:
-                out.extend(expand(parse(defs[t]), defs, keep))
+                out.extend(expand(parse(defs[t]), defs, keep, False, inner))
             elif is_user(t, defs):              # its body as written, for body
-                out.append(Def(t, expand(parse(defs[t]), defs, keep, True), True))
+                out.append(Def(t, expand(parse(defs[t]), defs, keep, True, inner), True))
             else:
-                out.append(Def(t, expand(parse(defs[t]), defs, keep), False))
+                out.append(Def(t, expand(parse(defs[t]), defs, keep, False, inner), False))
         elif (isinstance(t, str) and t not in KERNEL and t not in COMPILED_ONLY
               and t not in EXT and t not in IO and t not in keep):
             if not quoted:
@@ -647,8 +656,15 @@ def splice(prog: Program) -> Program:
 
 # ----------------------------------------------------------------- helpers
 
+#: the largest literal the reader takes, either way: SKIlark's integers
+#: are unary, one successor a unit, until binary numerals, and a literal
+#: nests as deep as it is large, where the equations' spill and SKIjack's
+#: probe (1,000 deep) recurse; 990 passes Python's recursion limit
+MAX_LITERAL = 900
+
+
 def nat(n: int) -> str:
-    return "Zero" if n == 0 else f"(Suc {nat(n - 1)})" if n > 1 else "(Suc Zero)"
+    return "(Suc " * n + "Zero" + ")" * n
 
 
 def integer(n: int) -> str:

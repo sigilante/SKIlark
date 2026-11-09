@@ -70,6 +70,26 @@ def test_derived_words_inline_to_the_kernel():
         expand(parse("1 frob"), DEFINITIONS)
 
 
+def test_a_recursive_definition_is_refused_by_name():
+    """SKIlark inlines its words, where the reference runs them by name."""
+    with pytest.raises(ValueError, match="recursive definition.*a -> b -> a"):
+        expand(parse("[a] first"), dict(DEFINITIONS, a="b", b="[a] i"))
+    with pytest.raises(ValueError, match="recursive definition.*ack -> ack"):
+        expand(parse("1 ack"), dict(DEFINITIONS, ack="[dup] [ack] ifte"))
+
+
+def test_a_literal_past_the_unary_bound_is_refused():
+    assert parse(f"{joy.MAX_LITERAL} -{joy.MAX_LITERAL}") == [joy.MAX_LITERAL, -joy.MAX_LITERAL]
+    for t in (f"{joy.MAX_LITERAL + 1}", f"[-{joy.MAX_LITERAL + 1}]", "123456789"):
+        with pytest.raises(ValueError, match="past SKIlark's unary numerals"):
+            parse(t)
+
+
+def test_the_largest_literal_runs():
+    run = interpreted({"p": f"{joy.MAX_LITERAL} [{joy.MAX_LITERAL}] first ="})
+    assert run.run("up")[0] == ("RVal", [True])
+
+
 def test_an_undefined_word_in_a_quotation_is_a_symbol():
     """The reference reads it as a symbol with no body, which runs as
     nothing (undeferror 0)."""

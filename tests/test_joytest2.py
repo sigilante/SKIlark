@@ -86,10 +86,10 @@ MODEL = {
 
 #: SKIlark's known failures, beyond the model's
 SKILARK = dict(MODEL, **{
-    "casting.joy": "casting is modelled for few type pairs, and 123456789 is unary",
-    "condlinrec.joy": "a recursive DEFINE (ack): the expander does not terminate",
+    "casting.joy": "casting is modelled for few type pairs, and 123456789 is past the literal bound",
+    "condlinrec.joy": "a recursive DEFINE (ack), refused by name: SKIlark inlines its words",
     "condnestrec.joy": "3 4 cnr-ack in unary numerals runs out of fuel",
-    **{f: "123456789: a unary literal past Python's recursion limit"
+    **{f: "123456789, refused: past the unary literal bound (joy.MAX_LITERAL)"
        for f in ("equal.joy", "eql.joy", "geql.joy", "greater.joy", "leql.joy", "less.joy")},
 })
 
