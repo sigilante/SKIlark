@@ -586,11 +586,12 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
         elif isinstance(t, list):
             out.append(expand(t, defs, keep, True))
         elif isinstance(t, str) and t in defs and t not in keep:
-            body = expand(parse(defs[t]), defs, keep)
-            if quoted:
-                out.append(Def(t, body, is_user(t, defs)))
+            if not quoted:
+                out.extend(expand(parse(defs[t]), defs, keep))
+            elif is_user(t, defs):              # its body as written, for body
+                out.append(Def(t, expand(parse(defs[t]), defs, keep, True), True))
             else:
-                out.extend(body)
+                out.append(Def(t, expand(parse(defs[t]), defs, keep), False))
         elif (isinstance(t, str) and t not in KERNEL and t not in COMPILED_ONLY
               and t not in EXT and t not in IO and t not in keep):
             if not quoted:

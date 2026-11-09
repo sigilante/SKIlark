@@ -87,7 +87,6 @@ MODEL = {
 #: SKIlark's known failures, beyond the model's
 SKILARK = dict(MODEL, **{
     "casting.joy": "casting is modelled for few type pairs, and 123456789 is unary",
-    "body.joy": "body of a DEFINE gives its expansion, not its text",
     "condlinrec.joy": "a recursive DEFINE (ack): the expander does not terminate",
     "condnestrec.joy": "3 4 cnr-ack in unary numerals runs out of fuel",
     **{f: "123456789: a unary literal past Python's recursion limit"
