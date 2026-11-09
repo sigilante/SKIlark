@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "skilark"
+name = "skilark-joy"
 version = "0.10.0"
 description = "Joy on SKIjack: a concatenative language whose words are closed SKI supercombinators"
 readme = "README.md"
