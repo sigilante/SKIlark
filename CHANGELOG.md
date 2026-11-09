@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased (0.11.0)
+## 0.11.0 (2026-11-09)
+
+The first release on PyPI, as `skilark-joy`.
 
 - **The distribution is `skilark-joy`**, since `skilark` on PyPI is
   another project's. The package it installs is still `skilark`.
-
 - **The reference's own tests** (stage 16, `tests/test_joytest2.py`):
   Wodan58/Joy's `test2/` copied whole at fe9fa0f with its licence
   (`tests/joy/`). Every file is run by the model and, on the slow job, by

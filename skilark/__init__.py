@@ -27,7 +27,7 @@ from . import abstraction, joy
 
 __all__ = ["DIR", "Joy", "Run", "compiled", "interpreted", "level1", "read",
            "__version__"]
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 
 #: the directory holding the ``.ski`` sources
 DIR = pathlib.Path(__file__).parent / "programs"
