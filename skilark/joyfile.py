@@ -22,6 +22,7 @@ the same values, the earlier terms run again.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import joy
@@ -67,6 +68,24 @@ def _strip(text: str) -> str:
     return "".join(out)
 
 
+def _numeric(before: str) -> bool:
+    """Whether ``before`` ends in a token scan.c reads as a number: one that
+    begins with a digit, or with ``-`` and a digit."""
+    tok = re.split(r"[\s\[\]{};]", before)[-1]
+    return bool(tok) and (tok[0].isdigit() or tok[:1] == "-" and tok[1:2].isdigit())
+
+
+def _float(text: str, i: int) -> str:
+    """The float literal whose full stop is at ``i``."""
+    a = i
+    while a > 0 and not (text[a - 1].isspace() or text[a - 1] in "[]{};"):
+        a -= 1
+    b = i + 1
+    while b < len(text) and not (text[b].isspace() or text[b] in "[]{};."):
+        b += 1
+    return text[a:b]
+
+
 def _split(text: str, stop: str) -> List[str]:
     """``text`` cut at each ``stop`` outside strings and characters."""
     parts, cur, i, n = [], [], 0, len(text)
@@ -83,6 +102,8 @@ def _split(text: str, stop: str) -> List[str]:
                 j += 1
             cur.append(text[i:j]); i = j
         elif c == stop:
+            if stop == "." and i + 1 < n and text[i + 1].isdigit() and _numeric("".join(cur)):
+                raise JoyFileError(f"a float, which SKIlark does not have: {_float(text, i)!r}")
             parts.append("".join(cur)); cur = []; i += 1
         else:
             cur.append(c); i += 1

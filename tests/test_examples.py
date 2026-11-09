@@ -5,6 +5,7 @@ prints; joyref's model gives it, and SKIlark, interpreted, must too.
 Each file is its own test, and its own program set."""
 
 import pathlib
+import re
 
 import pytest
 
@@ -54,6 +55,16 @@ def test_an_empty_term_prints_the_top():
 def test_a_term_needs_its_period():
     with pytest.raises(joyfile.JoyFileError, match="no period"):
         joyfile.read("1 2 +")
+
+
+def test_a_float_is_refused_by_name():
+    """scan.c reads a number, a full stop and a digit as a float; SKIlark,
+    which has none, refuses it rather than reading two terms."""
+    for text, lit in (("1 2.5 + .", "2.5"), ("[-3.14] .", "-3.14"), ("0.5e3 .", "0.5e3")):
+        with pytest.raises(joyfile.JoyFileError, match=f"a float.*{re.escape(lit)}"):
+            joyfile.read(text)
+    assert joyfile.read("[1 2 3]. 2. 5 .") == [("term", "[1 2 3]"), ("term", "2"), ("term", "5")]
+    assert joyfile.read('"2.5" 1e5 .') == [("term", '"2.5" 1e5')]
 
 
 def test_the_reference_s_scoping_is_not_skilark_s():
