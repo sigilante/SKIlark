@@ -1376,9 +1376,10 @@ are dropped first, and the library words the files use are defined. Every known 
      compiled form's table and the interpreted kernel's `nameText`.
   7. A literal past 900 either way is refused by name
      (`joy.MAX_LITERAL`). A literal nests as deep as it is large, and
-     `spill`, which cuts the equations, exceeds Python's recursion limit
-     near 990. SKIjack's probe reads no numeral deeper than 1,000. `nat`
-     no longer recurses. `123456789` waits on binary numerals.
+     SKIjack's probe reads no numeral deeper than 1,000. `nat`, and
+     `spill`'s depth and text, no longer recurse; on Python 3.11 they
+     exceeded the recursion limit at 900. `123456789` waits on binary
+     numerals.
   8. The harness leaves out casting.joy's three pointer casts by name
      (`DEVIATIONS`): a builtin symbol as a function, the integer 0 as a
      list, and a list as a file. The rest of the file passes in the model,

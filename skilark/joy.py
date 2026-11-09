@@ -681,8 +681,8 @@ def _integers(t: str) -> List[Union[int, str]]:
 
 #: the largest literal the reader takes, either way: SKIlark's integers
 #: are unary, one successor a unit, until binary numerals, and a literal
-#: nests as deep as it is large, where the equations' spill and SKIjack's
-#: probe (1,000 deep) recurse; 990 exceeds Python's recursion limit
+#: nests as deep as it is large; SKIjack's probe reads no numeral deeper
+#: than 1,000, and the bound leaves room under it
 MAX_LITERAL = 900
 
 
@@ -759,18 +759,42 @@ def _tree(expr: str) -> list:
 
 def _app_depth(node, d: int = 0) -> int:
     """How deep the applications of ``node`` nest below depth ``d``, as
-    SKIjack counts them: ``f a b`` is ``(f a) b``, ``a`` two levels down."""
-    if isinstance(node, str):
-        return d
-    if len(node) == 1:
-        return _app_depth(node[0], d)
-    k = len(node) - 1
-    return max([_app_depth(node[0], d + k)]
-               + [_app_depth(a, d + k - i + 1) for i, a in enumerate(node[1:], 1)])
+    SKIjack counts them: ``f a b`` is ``(f a) b``, ``a`` two levels down.
+    A loop, not a recursion: a literal nests as deep as it is large."""
+    best, todo = d, [(node, d)]
+    while todo:
+        n, depth = todo.pop()
+        if isinstance(n, str) or not n:
+            best = max(best, depth)
+        elif len(n) == 1:
+            todo.append((n[0], depth))
+        else:
+            k = len(n) - 1
+            todo.append((n[0], depth + k))
+            todo.extend((a, depth + k - i + 1) for i, a in enumerate(n[1:], 1))
+    return best
 
 
 def _text(node) -> str:
-    return node if isinstance(node, str) else "(" + " ".join(map(_text, node)) + ")"
+    """A tree back as text; a loop, as ``_app_depth`` is."""
+    if isinstance(node, str):
+        return node
+    out: List[str] = []
+    todo: list = [node]
+    while todo:
+        x = todo.pop()
+        if isinstance(x, tuple):                    # a close or a space
+            out.append(x[0])
+        elif isinstance(x, str):
+            out.append(x)
+        else:
+            out.append("(")
+            todo.append((")",))
+            for i, a in enumerate(reversed(x)):
+                if i:
+                    todo.append((" ",))
+                todo.append(a)
+    return "".join(out)
 
 
 def spill(name: str, params: Sequence[str], expr: str) -> List[str]:
