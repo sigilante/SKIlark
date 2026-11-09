@@ -81,7 +81,6 @@ OUTPUT = {
 #: the model's known failures
 MODEL = {
     "all2.joy": "[] all: the file says false; someall.h and boolean.h at fe9fa0f give true",
-    "name.joy": 'name of a literal lacks the leading space of opername\'s " truth value type"',
     "casting.joy": "casting is modelled for few type pairs",
 }
 

@@ -1693,8 +1693,8 @@ NICKNAMES = {"+": "plus", "-": "minus", "*": "mul", "/": "divide", "=": "eql", "
              ">=": "geql", "<=": "leql", ">": "greater", "!=": "neql"}
 
 #: opername's names of the literal types (optable.c)
-TYPE_NAMES = {"Num": "integer type", "Quot": "list type", "Logical": "truth value type",
-              "Char": "character type", "Str": "string type", "Set": "set type"}
+TYPE_NAMES = {"Num": " integer type", "Quot": " list type", "Logical": " truth value type",
+              "Char": " character type", "Str": " string type", "Set": " set type"}
 
 
 def _compiled_names(c: "_Compiler", info: "Optional[_Lists]", named: bool, bodied: bool,

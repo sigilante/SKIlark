@@ -1312,8 +1312,8 @@ class Joy:
     # -- stage 10: symbols and their names (name.c, intern.c, body.c)
 
     #: opername's names of the literal types (optable.c)
-    TYPE_NAMES = {"B": "truth value type", "C": "character type", "N": "integer type",
-                  "Z": "set type", "T": "string type", "L": "list type"}
+    TYPE_NAMES = {"B": " truth value type", "C": " character type", "N": " integer type",
+                  "Z": " set type", "T": " string type", "L": " list type"}
 
     def w_name(self, s):                # sym -> "sym"; a literal's type's name
         self.params(s, 1)

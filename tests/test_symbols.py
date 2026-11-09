@@ -18,12 +18,12 @@ PROGRAMS = {
     "s3": '[>=] first name "geql" =',
     "s4": '[size] first name "size" =',
     "s5": '[nip] first name "nip" =',
-    "s6": '5 name "integer type" =',
-    "s7": '[] name "list type" =',
-    "s8": '"a" name "string type" =',
-    "s9": 'true name "truth value type" =',
-    "s10": '\'a name "character type" =',
-    "s11": '{1} name "set type" =',
+    "s6": '5 name " integer type" =',
+    "s7": '[] name " list type" =',
+    "s8": '"a" name " string type" =',
+    "s9": 'true name " truth value type" =',
+    "s10": '\'a name " character type" =',
+    "s11": '{1} name " set type" =',
     "s12": 'name',
     "s13": '[nip] first body',
     "s14": '[dup] first body',
@@ -181,7 +181,7 @@ def test_a_program_that_neither_names_nor_interns_carries_neither():
 LAWS = {
     "[nip] first body == [[pop] dip]":        ("[nip] first body [[pop] dip] equal", "true"),
     "[dup] first name == \"dup\"":            ('[dup] first name "dup" =', "true"),
-    "5 name == \"integer type\"":             ('5 name "integer type" =', "true"),
+    "5 name == \" integer type\"":             ('5 name " integer type" =', "true"),
 }
 INTERN_LAWS = {
     "\"dup\" intern == [dup] first":          ('"dup" intern [dup] first =', "true"),
