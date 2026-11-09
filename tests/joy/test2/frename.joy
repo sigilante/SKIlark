@@ -1,0 +1,8 @@
+(*
+    module  : frename.joy
+    version : 1.5
+    date    : 03/22/24
+*)
+"test" "w" fopen fclose.
+"test" "dummy" frename.
+$ rm dummy

@@ -1,0 +1,10 @@
+(*
+    module  : unary.joy
+    version : 1.6
+    date    : 04/15/24
+*)
+"numlib" libload.
+
+10 fib 55 =.
+
+2 20 [] unary stack [20 2] equal.

@@ -24,8 +24,8 @@
 > `tests/` pins every number in §1 and §3 (the level-1 runs under
 > `--runslow`).  Phase 4, a short write-up, remains.  Next, 0.11.0: the
 > reference's own tests (Wodan58/Joy `test2/`, at the commit `joyref.py`
-> models) adopted as a conformance suite, and the language adjustments
-> they call for.
+> models), adopted as a conformance suite in stage 16, and the language
+> adjustments they call for.
 > Where this document and the tests differ, the tests are authoritative.
 
 *A concatenative language in the line of Joy (von Thun) and Kerby's* Theory
@@ -1273,6 +1273,73 @@ words keep stage 14's behaviour, and stage 14's host checks it.
   nothing, as today. A refused open answers an error the kernel can test.
 - *The stage-14 host stays* as the reference's world in tests, and as the
   command line's path for a reducer that is not a driver runtime.
+
+*Stage 16: the reference's own tests (2026-11-07, opened; `tests/joy/`,
+`tests/test_joytest2.py`).* Wodan58/Joy's `test2/` files are copied
+at fe9fa0f, with its licence. It has 225 files, one per builtin, and each
+line of a file is a term the reference prints as `true`. Each file runs
+whole through the model, and on the slow job through SKIlark
+interpreted. Terms with a float literal, or with a word SKIlark lacks,
+are dropped first, and the library words the files use are defined. Every known failure is a strict expected failure with its reason.
+
+- *Coverage.* The files hold 839 readable terms, and the harness runs 572
+  of them. It drops 158 for floats, 54 for files, 16 for internals, 16
+  for settings, 11 for time and `rand`, 9 for the host (`system libload
+  assign`), and 3 for two of these kinds at once. 72 files lose every
+  term and are skipped with the kinds that dropped them. Eight files do
+  not read: seven hold a shell transcript and one holds input for `get`.
+  `frexp.joy` is skipped too, since its integer term pops what its float
+  terms left.
+- *Results.* The model passes 141 files and fails 3. SKIlark passes 124
+  and fails 20, the model's 3 among them. Five files print values, not
+  `true`: `clock getenv put putch putchars`. Three print nothing: `abort
+  id quit`. Those eight are pinned against the stage-14 host's world:
+  `argv` is the file's name, `PATH` is `/bin`, and the clock reads 0.
+- *Found, with what to do.* Each item is in SKIlark, in the model, or in
+  both, as marked.
+  1. *Floats split silently* (the reader). `2.5` reads as the term `2`
+     and then a term that begins `5`, so a float never reaches an error.
+     The reader should refuse a float literal by name.
+  2. *An undefined word in a quotation is refused* (SKIlark; 12 files,
+     including `geql less case undefs`). The reference reads `[ustu]` as
+     a symbol and errs only on running it. The expander should make an
+     undefined word a bodiless `Def`, as `intern` does, so running it
+     errs.
+  3. *A later DEFINE redefines a word for the whole file* (SKIlark;
+     `cond.joy`). `_terms` merges every DEFINE before the first term
+     runs. The reader should rename a shadowed word, so each term sees
+     the definitions read before it.
+  4. *`body` of a DEFINE gives its expansion* (SKIlark; `body.joy`).
+     `[sum] first body` gives the inlined body of `fold`, not `[0 [+]
+     fold]`. A `Def` should keep its text as written, and `body` should
+     give that text.
+  5. *A recursive DEFINE never finishes expanding* (SKIlark;
+     `condlinrec.joy`'s `ack`). `expand` inlines `ack` inside `ack` until
+     Python's recursion limit. The reference runs user words by name.
+     SKIlark should first refuse the cycle by name. Supporting it, by
+     keeping a recursive word as a `Def` run by name or by a fixpoint, is
+     a decision.
+  6. *`name` of a literal drops a space* (both; `name.joy`). The
+     reference's `opername` gives `" truth value type"`, and the model and
+     SKIlark omit its leading space. A one-line fix.
+  7. *Large literals* (SKIlark; `123456789` in 7 files, and `3 4 cnr-ack` in
+     `condnestrec.joy`). Integers are unary, so `nat` recurses once per
+     unit, and `3 4 cnr-ack`, which is 125, runs out of 2×10⁹ contractions.
+     This is the known limit left for binary numerals. Until those
+     arrive, a literal past a bound should be refused by name.
+  8. *`casting` is partial* (both; `casting.joy`). The terms that fail
+     cast to types 3, 9 and 11. The reference reinterprets a node's
+     value as another type's, so some pairs are artefacts of its memory.
+     Those should be pinned as deviations rather than built.
+  9. *`[] all` disagrees with the source* (both; `all2.joy`). The file
+     expects `false` for `[1 2 3] [] all`. `someall.h` and `get_boolean`
+     at fe9fa0f give `true`, as `[1 2 3] [] some` does in `some.joy`.
+     Only the reference binary can settle which is right.
+- *Left out.* The absent words stay absent for 0.11.0. Floats are the
+  largest bloc, at 158 terms and 26 whole files; the file words wait on
+  stage 15's cards. The harness checks that every word it drops is
+  absent from both SKIlark and the model, so adding a word fails that
+  check until the word leaves the list and its terms run.
 
 ## 4. Risks
 
