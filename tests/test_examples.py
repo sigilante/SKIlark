@@ -77,6 +77,42 @@ def test_a_redefinition_holds_from_where_it_is_read():
     assert joyfile.run_file(text) == lines
 
 
+def test_a_word_defined_later_is_undefined_before():
+    """A term sees no definition read after it (the reference errs there
+    under usrlib's undeferror 1, and runs nothing under 0, as SKIlark does)."""
+    text = "DEFINE f == [g] . f i . DEFINE g == 5 . f i .\n"
+    assert joyref.Joy().run_file(text) == ["5"]
+    assert joyfile.run_file(text) == ["5"]
+    assert joyfile.run_file(text, form="compiled") == ["5"]
+
+
+def test_epoch_names_meet_no_word_of_the_file():
+    """A word named like an epoch's is the file's own (the reference prints
+    9 2 9 "a~1"), and a redefined word's name has no epoch, compiled too."""
+    text = ("DEFINE a~1 == 9 ; a == 1 . a~1 . DEFINE a == 2 . a . a~1 .\n"
+            "[a~1] first name . [a] first name size .\n")
+    lines = ["9", "2", "9", '"a~1"', "1"]
+    assert joyref.Joy().run_file(text) == lines
+    assert joyfile.run_file(text) == lines
+    assert joyfile.run_file(text, form="compiled") == lines
+
+
+def test_a_definition_overwrites_a_builtin():
+    """The reference warns "overwriting inbuilt" and runs the definition."""
+    text = "DEFINE dup == pop 7 . 1 dup . DEFINE dup == pop 8 . 1 dup .\n"
+    assert joyref.Joy().run_file(text) == ["7", "8"]
+    assert joyfile.run_file(text) == ["7", "8"]
+
+
+def test_a_module_s_member_is_refused_by_name():
+    """scan.c reads a word, a full stop and a letter, digit or one of -=_ as
+    a module's member; SKIlark has no modules."""
+    for text, tok in (("[x.5] .", "x.5"), ("-.5 .", "-.5"), ("a.b .", "a.b")):
+        with pytest.raises(joyfile.JoyFileError, match=f"module's member.*{re.escape(tok)}"):
+            joyfile.read(text)
+    assert joyfile.read("foo. 1 .") == [("term", "foo"), ("term", "1")]
+
+
 def test_the_reference_s_scoping_is_not_skilark_s():
     with pytest.raises(joyfile.JoyFileError, match="HIDE"):
         joyfile.read("HIDE x == 1 IN y == x END .")

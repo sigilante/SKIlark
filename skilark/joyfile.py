@@ -68,10 +68,15 @@ def _strip(text: str) -> str:
     return "".join(out)
 
 
+def _token(before: str) -> str:
+    """The token ``before`` ends in, as scan.c reads tokens."""
+    return re.split(r"[\s\[\]{};()]", before)[-1]
+
+
 def _numeric(before: str) -> bool:
     """Whether ``before`` ends in a token scan.c reads as a number: one that
     begins with a digit, or with ``-`` and a digit."""
-    tok = re.split(r"[\s\[\]{};]", before)[-1]
+    tok = _token(before)
     return bool(tok) and (tok[0].isdigit() or tok[:1] == "-" and tok[1:2].isdigit())
 
 
@@ -104,6 +109,10 @@ def _split(text: str, stop: str) -> List[str]:
         elif c == stop:
             if stop == "." and i + 1 < n and text[i + 1].isdigit() and _numeric("".join(cur)):
                 raise JoyFileError(f"a float, which SKIlark does not have: {_float(text, i)!r}")
+            if (stop == "." and i + 1 < n and (text[i + 1].isalnum() or text[i + 1] in "-=_")
+                    and _token("".join(cur)) and not _numeric("".join(cur))):
+                raise JoyFileError(f"a module's member, which SKIlark does not have: "
+                                   f"{_float(text, i)!r}")
             parts.append("".join(cur)); cur = []; i += 1
         else:
             cur.append(c); i += 1
@@ -270,18 +279,22 @@ def run_text(text: str, form: str = "interpreted", host=None) -> str:
 def _terms(text: str) -> Tuple[Dict[str, str], List[str]]:
     """The file's definitions and terms, each term to run with the
     definitions read before it, as the reference's symbol table gives
-    them.  A DEFINE that redefines a word the file defined begins an epoch:
-    from then on every word the file defines is ``joy.epoch_name`` of its
-    name and the epoch, in the terms and in a copy of every definition, so
-    the terms before keep the words they saw."""
+    them.  A DEFINE begins an epoch where it gives a word the file has
+    already met: one it defined, or one a term or a definition read
+    before it used.  From then on every word the file defines is
+    ``joy.epoch_name`` of its name and the epoch, in the terms and in a
+    copy of every definition, so the terms before keep the words they saw:
+    a word defined after them is undefined there."""
     defs: Dict[str, str] = {}
     terms: List[str] = []
     seen: Dict[str, str] = {}
+    met: set = set()
     epoch = 0
     for kind, item in read(text):
         if kind == "define":
-            if seen.keys() & item.keys():
+            if item.keys() & (seen.keys() | met):
                 epoch += 1
+            met.update(*(_words(b) for b in item.values()))
             seen.update(item)
             if epoch:
                 defs.update({joy.epoch_name(n, epoch): _in_epoch(b, seen, epoch)
@@ -289,12 +302,18 @@ def _terms(text: str) -> Tuple[Dict[str, str], List[str]]:
             else:
                 defs.update(item)
         else:
+            met.update(_words(item))
             terms.append(_in_epoch(item, seen, epoch) if epoch else item)
     return defs, terms
 
 
 #: a string, a character, or a word, as the reference's scanner reads them
 _TOKEN = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\\d{1,3}|\\.|.)|[^\s\[\]{}"\']+')
+
+
+def _words(text: str) -> set:
+    """The words of ``text``, its strings and characters left out."""
+    return {m.group(0) for m in _TOKEN.finditer(text) if m.group(0)[0] not in "\"'"}
 
 
 def _in_epoch(text: str, names: Dict[str, str], epoch: int) -> str:

@@ -55,14 +55,15 @@ class Def:
 
 
 def epoch_name(name: str, epoch: int) -> str:
-    """A file's word in the epoch a redefinition began (``joyfile._terms``):
-    ``test`` in epoch 1 is ``test~1``."""
-    return f"{name}~{epoch}"
+    """A file's word in an epoch (``joyfile._terms``): ``test`` in epoch 1
+    is ``test#1``.  No word the reference reads holds ``#``, which begins a
+    comment there (scan.c), so an epoch's name meets no word of a file's."""
+    return f"{name}#{epoch}"
 
 
 def plain_name(name: str) -> str:
     """A word's name as Joy reads it, without its epoch."""
-    return re.sub(r"~\d+$", "", name)
+    return re.sub(r"#\d+$", "", name)
 
 
 DIR = pathlib.Path(__file__).parent / "programs"
@@ -499,10 +500,13 @@ def _set_literal(members: Program) -> Tuple[str, Tuple[int, ...]]:
     return ("Z", tuple(sorted(set(codes))))
 
 
-def parse(text: str) -> Program:
+def parse(text: str, base0: bool = True) -> Program:
     """``"3 [dup +] i"`` -> ``[3, ['dup', '+'], 'i']``; a character
     ``'a`` is ``("C", 97)``, a string ``"ab"`` is ``("T", (97, 98))`` and
-    a set ``{2 1}`` is ``("Z", (1, 2))``."""
+    a set ``{2 1}`` is ``("Z", (1, 2))``.  Integers read as scan.c reads
+    them (``_integers``); without ``base0``, as stage 14's ``get`` and the
+    door's reader read them, a token of digits alone is a decimal integer
+    and any other token a word."""
     stack: List[Program] = [[]]
     opens: List[str] = []
     i = 0
@@ -550,13 +554,12 @@ def parse(text: str) -> Program:
                 j += 1
             t = text[i:j]
             i = j
-            if t.isdigit() or (t[0] == "-" and t[1:].isdigit()):
-                if abs(int(t)) > MAX_LITERAL:
+            for n in (_integers(t) if base0 else
+                      [int(t)] if t.isdigit() or (t[0] == "-" and t[1:].isdigit()) else [t]):
+                if isinstance(n, int) and abs(n) > MAX_LITERAL:
                     raise ValueError(f"a literal past SKIlark's unary numerals: {t} "
                                      f"(at most {MAX_LITERAL} either way)")
-                stack[-1].append(int(t))
-            else:
-                stack[-1].append(t)
+                stack[-1].append(n)
     if opens:
         raise ValueError(f"unbalanced {opens[-1]!r}")
     return stack[0]
@@ -579,7 +582,8 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
     """Inline every derived word except those in ``keep``; inside a
     quotation (``quoted``) a derived word is a ``Def`` of its expansion,
     and a word nothing defines is the reference's undefined symbol, a user
-    ``Def`` with no body, which runs as nothing (``undeferror`` 0).  At
+    ``Def`` with no body, which runs as nothing, as under the reference's
+    ``undeferror`` 0, its default without usrlib.joy.  At
     the top, a word nothing defines is refused.  A word whose expansion
     reaches itself (``within`` holds the words being expanded) is refused
     by name: SKIlark inlines its words, and the reference runs them by name."""
@@ -624,7 +628,7 @@ def literal_text(t: Tuple[str, object]) -> str:
 def words(prog: Program) -> str:
     """A program back as Joy text."""
     return " ".join(f"[{words(t)}]" if isinstance(t, list) else
-                    plain_name(t.name) if isinstance(t, Def) else
+                    t.name if isinstance(t, Def) else
                     literal_text(t) if isinstance(t, tuple) else str(t) for t in prog)
 
 
@@ -656,10 +660,29 @@ def splice(prog: Program) -> Program:
 
 # ----------------------------------------------------------------- helpers
 
+def _integers(t: str) -> List[Union[int, str]]:
+    """A token as scan.c reads it: one that begins with a digit, or with
+    ``-`` and a digit, is a number by ``strtoll`` base 0 (``0x10`` is 16,
+    ``017`` is 15), and what ``strtoll`` leaves is read again as tokens
+    (``09`` is 0 and 9); any other token is a word."""
+    body = t[1:] if t[:1] == "-" else t
+    if not body[:1].isdigit():
+        return [t]
+    m = re.match(r"0[xX][0-9a-fA-F]+|0[0-7]*|[1-9][0-9]*", body)
+    if m.group(0).startswith(("0x", "0X")):
+        n = int(m.group(0), 16)
+    elif m.group(0).startswith("0"):
+        n = int(m.group(0), 8)
+    else:
+        n = int(m.group(0))
+    rest = body[m.end():]
+    return [-n if t[:1] == "-" else n] + (_integers(rest) if rest else [])
+
+
 #: the largest literal the reader takes, either way: SKIlark's integers
 #: are unary, one successor a unit, until binary numerals, and a literal
 #: nests as deep as it is large, where the equations' spill and SKIjack's
-#: probe (1,000 deep) recurse; 990 passes Python's recursion limit
+#: probe (1,000 deep) recurse; 990 exceeds Python's recursion limit
 MAX_LITERAL = 900
 
 
@@ -1254,7 +1277,7 @@ class _Lists:
 #: a derived word's symbol: ``Z`` and its name, an operator's characters
 #: spelled out
 _MANGLE = {"!": "Bang", "+": "Plus", "-": "Minus", "*": "Star", "/": "Slash",
-           "<": "Lt", "=": "Eq", ">": "Gt", "~": "Tilde"}
+           "<": "Lt", "=": "Eq", ">": "Gt", "#": "Hash", "~": "Tilde"}
 
 
 def def_symbol(name: str, user: bool = False) -> str:
@@ -1353,7 +1376,7 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
         symtext = ""
         if lists and truth:
             symtext = "-- a symbol's name, its codes, to compare with a string\nsymText y = y |> { " + "; ".join(
-                f"{y} {_codes(lit, nm)}" for y, nm in zip(lists.syms or ["YNone"], lists.names or [""])) + " }\n"
+                f"{y} {_codes(lit, plain_name(nm))}" for y, nm in zip(lists.syms or ["YNone"], lists.names or [""])) + " }\n"
         text_block = COMPILED_TEXT.format(
             ORDLOG="; Logical b (RVal (Push (Num (boolZ b)) t))" if truth else "",
             CHRLOG="; Logical b (RVal (Push (Char (boolZ b)) t))" if truth else "",
@@ -1749,7 +1772,7 @@ def _compiled_names(c: "_Compiler", info: "Optional[_Lists]", named: bool, bodie
             return c.text([ord(ch) for ch in word])
         arms = [f"{k} {v} " + ("(symName y)" if k == "Sym" else txt(TYPE_NAMES[k])) for k, v in kinds]
         out.append("nameI a = a |> { " + "; ".join(arms) + " }\n")
-        sarms = [f"{y} {txt(NICKNAMES.get(n, n) if not y.startswith('U') else n)}"
+        sarms = [f"{y} {txt(NICKNAMES.get(n, n) if not y.startswith('U') else plain_name(n))}"
                  for y, n in zip(syms, names)] or ["YNone TNil"]
         out.append("symName y = y |> { " + "; ".join(sarms) + " }\n")
         out.append("wName s = s |> { Empty RErr; Push a t (RVal (Push (Str (nameI a)) t)) }\n")

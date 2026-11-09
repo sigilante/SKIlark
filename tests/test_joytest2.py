@@ -79,8 +79,11 @@ READER["get.joy"] = "input for get after the terms, not Joy"
 #: files that cannot run, and why
 SKIP = dict(READER, **{"frexp.joy": "its integer term pops what its float terms leave"})
 
-#: files whose lines are values, with the lines the reference prints
+#: files whose lines are not all true, with the lines the reference prints
+#: (its binary at fe9fa0f, run on the prepared file, gives these lines,
+#: and the model gives every other file's lines too, but getenv's PATH)
 OUTPUT = {
+    "all2.joy": ["true"] * 9 + ["false"] * 3,     # [1 2 3] [] all is true there
     "abort.joy": [], "id.joy": [], "quit.joy": [],
     "clock.joy": ["0"],
     "getenv.joy": ['"/bin"', "true"],
@@ -90,9 +93,7 @@ OUTPUT = {
 }
 
 #: the model's known failures
-MODEL = {
-    "all2.joy": "[] all: the file says false; someall.h and boolean.h at fe9fa0f give true",
-}
+MODEL: dict = {}
 
 #: SKIlark's known failures, beyond the model's
 SKILARK = dict(MODEL, **{
@@ -202,6 +203,15 @@ def test_deviations_are_terms():
         read = {item for kind, item in joyfile.read(SCAN.sub(
             lambda m: "FLOATLIT" if m.group(1) else m.group(0), raw)) if kind == "term"}
         assert terms.keys() <= read, name
+
+
+def test_the_model_s_gaps_still_raise():
+    """A reference builtin the model lacks raises; any other undefined word
+    runs as nothing, as the reference's undefined symbol does."""
+    assert {"+", "plus", ">=", "geql", "fopen", "dup"} <= joyref.REFERENCE_WORDS
+    with pytest.raises(KeyError, match="fopen"):
+        joyref.Joy().run_file('"f" "r" fopen .')
+    assert joyref.Joy().run_file("1 [frob] i .") == ["1"]
 
 
 def test_reader_refuses():

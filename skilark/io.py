@@ -157,7 +157,7 @@ class Host:
         j = factor_end(text, i)
         self.at = j
         try:
-            parsed = joy.parse(text[i:j])
+            parsed = joy.parse(text[i:j], base0=False)
         except (ValueError, IndexError):
             return None
         return _from_parse(parsed[0]) if len(parsed) == 1 else None

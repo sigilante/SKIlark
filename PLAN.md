@@ -1291,7 +1291,8 @@ are dropped first, and the library words the files use are defined. Every known 
   not read: seven hold a shell transcript and one holds input for `get`.
   `frexp.joy` is skipped too, since its integer term pops what its float
   terms left.
-- *Results.* The model passes 141 files and fails 3. SKIlark passes 124
+- *Results, at opening (2026-11-07; see Done for now).* The model passes
+  141 files and fails 3. SKIlark passes 124
   and fails 20, the model's 3 among them. Five files print values, not
   `true`: `clock getenv put putch putchars`. Three print nothing: `abort
   id quit`. Those eight are pinned against the stage-14 host's world:
@@ -1336,45 +1337,73 @@ are dropped first, and the library words the files use are defined. Every known 
      expects `false` for `[1 2 3] [] all`. `someall.h` and `get_boolean`
      at fe9fa0f give `true`, as `[1 2 3] [] some` does in `some.joy`.
      Only the reference binary can settle which is right.
-- *Done (2026-11-09).* The model now passes 143 of its 144 runnable
-  files and SKIlark 134; each remaining failure is pinned with its reason.
+- *Done (2026-11-09).* The model now passes all 144 runnable files and
+  SKIlark 135; each remaining failure is pinned with its reason. The
+  items answer Found's by number. A Gnome probe and the reference binary
+  checked them, and what they found is folded in.
   1. The reader refuses a float by name, as scan.c reads one: a number,
      a full stop and a digit. `1e5` is still the integer 1 and the word
      `e5`, as the reference reads it.
   2. An undefined word in a quotation is a user `Def` with no body,
-     which runs as nothing (`undeferror` 0, the reference's default). At
+     which runs as nothing, as under `undeferror` 0: the reference's
+     default, which usrlib.joy's `standard-setting` sets to 1. At
      the top of a program it is still refused. The model runs an
      undefined symbol as nothing too. It raises only for a builtin of
      the reference's (`table.c`) that it lacks, so a gap in the model
      still shows.
-  3. A DEFINE that redefines one of the file's words begins an epoch.
-     From then on each of the file's words is `name~epoch` in the terms
-     and in a copy of the definitions, so each term sees the definitions
-     read before it, as the reference's symbol table gives them. A quoted
-     word reads back by its plain name. A word of the file's own named
-     like `a~1` would meet an epoch's name. `intern` of a redefined word
-     finds its first definition, and a redefinition of one of Joy's own
-     words still holds for the whole file.
+  3. A DEFINE begins an epoch where it gives a word the file has already
+     met: one it defined, or one a term or a definition read before it
+     used. From then on each of the file's words is `name#epoch` in the
+     terms and in a copy of the definitions. So each term sees the
+     definitions read before it, as the reference's symbol table gives
+     them, and a word defined after a term is undefined there (`DEFINE f
+     == [g] . f i . DEFINE g == 5 . f i .` prints only `5`). No word the
+     reference reads holds `#`, which begins a comment in scan.c, so an
+     epoch's name meets no word of the file's, and `a~1` is an ordinary
+     word. A word reads back by its plain name, in `name` and in the
+     compiled form's comparisons. `intern` of a redefined word finds its
+     first definition. A definition overwrites a builtin, as the
+     reference's does with a warning: SKIlark always did, and the model
+     now does too.
   4. A quoted user word's `Def` holds its body with its derived words as
      symbols, so `body` gives it as written. Joy's own words keep their
      inlined bodies, and no pinned count moves.
-  5. A recursive definition is refused by name (`ack -> ack`). Running
-     one by name stays undecided.
+  5. A recursive definition is refused by name (`ack -> ack`), decided
+     2026-11-09. A word that names itself only inside a quotation, such
+     as `a == [a]`, is refused too, though the reference prints `[a]`
+     for it: SKIlark's `Def` holds its body, so it cannot hold itself.
   6. `name` of a literal has the leading space, in the model, the
      compiled form's table and the interpreted kernel's `nameText`.
   7. A literal past 900 either way is refused by name
      (`joy.MAX_LITERAL`). A literal nests as deep as it is large, and
-     `spill`, which cuts the equations, passes Python's recursion limit
+     `spill`, which cuts the equations, exceeds Python's recursion limit
      near 990. SKIjack's probe reads no numeral deeper than 1,000. `nat`
      no longer recurses. `123456789` waits on binary numerals.
   8. The harness leaves out casting.joy's three pointer casts by name
      (`DEVIATIONS`): a builtin symbol as a function, the integer 0 as a
      list, and a list as a file. The rest of the file passes in the model,
      and in SKIlark but for `123456789`.
-  9. Open: `[] all` needs the reference binary.
-  Still pinned: `all2` (9, both), `condlinrec` (5), `condnestrec` (`3 4
-  cnr-ack` in unary runs out of fuel), and the six files with
-  `123456789` (7).
+  9. The reference binary, built at fe9fa0f, settles `[] all`: it prints
+     `true` for `[1 2 3] [] all`, so `all2.joy`'s last three lines print
+     `false` there too. The file is stale, and the model and SKIlark are
+     right; `OUTPUT` pins the binary's lines. Run on the text the harness
+     prepares, the binary prints what the model prints for all 144
+     runnable files, but `getenv`'s PATH, which is the machine's.
+  Still pinned: `condlinrec` (5), `condnestrec` (`3 4 cnr-ack` in unary
+  runs out of fuel), and seven files with `123456789` (7), `casting`
+  among them.
+- *The reader, against the binary.* Integers read as scan.c's
+  `strtoll` base 0 reads them: `0777` is 511, `0x10` is 16, and `0900` is
+  0 and then 900. A word followed by a full stop and a letter, digit or
+  one of `-=_` is a module's member there (`x.5`, `-.5`), and SKIlark
+  refuses it by name, as it refuses a float. Not modelled: a number past
+  the 64-bit range, which becomes a float there, and results past 1,000,
+  which SKIjack's probe cannot read back (`900 900 +` is 1800 there).
+  After an error, the compiled form errs on every later term of a file,
+  where the interpreted form and the reference run on.
+  Stage 14's `get` and the door's reader keep their own token rule: a
+  token of digits alone is a decimal integer, and any other token is a
+  word. The reference's `get` reads `12abc` as 12 and then the rest.
 - *Left out.* The absent words stay absent for 0.11.0. Floats are the
   largest bloc, at 158 terms and 26 whole files; the file words wait on
   stage 15's cards. The harness checks that every word it drops is

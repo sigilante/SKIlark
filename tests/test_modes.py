@@ -78,6 +78,11 @@ def test_a_recursive_definition_is_refused_by_name():
         expand(parse("1 ack"), dict(DEFINITIONS, ack="[dup] [ack] ifte"))
 
 
+def test_integers_read_as_strtoll_base_0_reads_them():
+    """scan.c: 0x10 is 16, 017 is 15, and 09 is 0 and then 9."""
+    assert parse("0x10 017 -017 09 0 10") == [16, 15, -15, 0, 9, 0, 10]
+
+
 def test_a_literal_past_the_unary_bound_is_refused():
     assert parse(f"{joy.MAX_LITERAL} -{joy.MAX_LITERAL}") == [joy.MAX_LITERAL, -joy.MAX_LITERAL]
     for t in (f"{joy.MAX_LITERAL + 1}", f"[-{joy.MAX_LITERAL + 1}]", "123456789"):
