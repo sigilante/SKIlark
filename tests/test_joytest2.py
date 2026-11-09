@@ -61,6 +61,17 @@ ABSENT = {
 }
 ABSENT_WORDS = {w: kind for kind, ws in ABSENT.items() for w in ws.split()}
 
+#: terms SKIlark and the model leave out on purpose, each with its reason:
+#: casting.c reinterprets a node's value as another type's, and these
+#: casts read a pointer as another kind of pointer
+DEVIATIONS = {
+    "casting.joy": {
+        "[pop] first 3 casting [pop] first =": "a builtin symbol as type 3, a function",
+        "0 9 casting [] equal": "the integer 0 as type 9, a list's null pointer",
+        "argv 11 casting argv !=": "a list as type 11, a file",
+    },
+}
+
 #: files that do not read, and why
 READER = {f"{n}.joy": "a shell transcript, not Joy" for n in
           "fput fputch fputchars fputstring frename fwrite helpdetail".split()}
@@ -68,8 +79,11 @@ READER["get.joy"] = "input for get after the terms, not Joy"
 #: files that cannot run, and why
 SKIP = dict(READER, **{"frexp.joy": "its integer term pops what its float terms leave"})
 
-#: files whose lines are values, with the lines the reference prints
+#: files whose lines are not all true, with the lines the reference prints
+#: (its binary at fe9fa0f, run on the prepared file, gives these lines,
+#: and the model gives every other file's lines too, but getenv's PATH)
 OUTPUT = {
+    "all2.joy": ["true"] * 9 + ["false"] * 3,     # [1 2 3] [] all is true there
     "abort.joy": [], "id.joy": [], "quit.joy": [],
     "clock.joy": ["0"],
     "getenv.joy": ['"/bin"', "true"],
@@ -79,26 +93,15 @@ OUTPUT = {
 }
 
 #: the model's known failures
-MODEL = {
-    "all2.joy": "[] all: the file says false; someall.h and boolean.h at fe9fa0f give true",
-    "name.joy": 'name of a literal lacks the leading space of opername\'s " truth value type"',
-    "casting.joy": "casting is modelled for few type pairs",
-}
+MODEL: dict = {}
 
 #: SKIlark's known failures, beyond the model's
 SKILARK = dict(MODEL, **{
-    "casting.joy": "casting is modelled for few type pairs, and 123456789 is unary",
-    "body.joy": "body of a DEFINE gives its expansion, not its text",
-    "cond.joy": "a DEFINE later in the file redefines the word for every term",
-    "condlinrec.joy": "a recursive DEFINE (ack): the expander does not terminate",
+    "casting.joy": "123456789, refused: past the unary literal bound (joy.MAX_LITERAL)",
+    "condlinrec.joy": "a recursive DEFINE (ack), refused by name: SKIlark inlines its words",
     "condnestrec.joy": "3 4 cnr-ack in unary numerals runs out of fuel",
-    **{f: "123456789: a unary literal past Python's recursion limit"
-       for f in ("equal.joy",)},
-    **{f: "an undefined word in a quotation is refused, not read as a symbol"
-       for f in ("case.joy", "compare.joy", "ifstring.joy", "include.joy",
-                 "neql.joy", "sametype.joy", "undefs.joy")},
-    **{f: "an undefined word in a quotation, and 123456789 unary"
-       for f in ("eql.joy", "geql.joy", "greater.joy", "leql.joy", "less.joy")},
+    **{f: "123456789, refused: past the unary literal bound (joy.MAX_LITERAL)"
+       for f in ("equal.joy", "eql.joy", "geql.joy", "greater.joy", "leql.joy", "less.joy")},
 })
 
 STRING = r'"(?:\\.|[^"\\])*"'
@@ -120,6 +123,8 @@ def prepared(name):
         text = item if kind == "term" else " ".join(item.values())
         used = words(text)
         kinds = {"floats"} if "FLOATLIT" in used else set()
+        if kind == "term" and item in DEVIATIONS.get(name, {}):
+            kinds.add("deviation")
         kinds |= {ABSENT_WORDS[w] for w in used & ABSENT_WORDS.keys()}
         if kinds:
             dropped.append(kinds)
@@ -189,6 +194,24 @@ def test_absent_are_absent():
     model = set(joyref.Joy().b) | set(joyref.Joy().defs)
     ours = set(joy.KERNEL) | set(joy.DEFINITIONS) | set(joy.EXT) | set(joy.IO) | set(joy.COMPILED_ONLY)
     assert not ABSENT_WORDS.keys() & (model | ours)
+
+
+def test_deviations_are_terms():
+    """Each term DEVIATIONS names is a term of its file, as read."""
+    for name, terms in DEVIATIONS.items():
+        raw = (SUITE / name).read_text(encoding="utf-8")
+        read = {item for kind, item in joyfile.read(SCAN.sub(
+            lambda m: "FLOATLIT" if m.group(1) else m.group(0), raw)) if kind == "term"}
+        assert terms.keys() <= read, name
+
+
+def test_the_model_s_gaps_still_raise():
+    """A reference builtin the model lacks raises; any other undefined word
+    runs as nothing, as the reference's undefined symbol does."""
+    assert {"+", "plus", ">=", "geql", "fopen", "dup"} <= joyref.REFERENCE_WORDS
+    with pytest.raises(KeyError, match="fopen"):
+        joyref.Joy().run_file('"f" "r" fopen .')
+    assert joyref.Joy().run_file("1 [frob] i .") == ["1"]
 
 
 def test_reader_refuses():

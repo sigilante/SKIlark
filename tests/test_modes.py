@@ -8,7 +8,7 @@ set compiles with integers and truth values; all measured on skijack
 import pytest
 
 from skilark import compiled, interpreted, joy
-from skilark.joy import DEFINITIONS, expand, parse, words
+from skilark.joy import DEFINITIONS, Def, expand, parse, words
 
 PROGRAMS = {
     "p1": "1 2 + dup +",
@@ -68,6 +68,37 @@ def test_derived_words_inline_to_the_kernel():
         [[1], ["dup", "cons"], "swap", "cat", "dup", "cons", "i"]
     with pytest.raises(ValueError, match="unknown word"):
         expand(parse("1 frob"), DEFINITIONS)
+
+
+def test_a_recursive_definition_is_refused_by_name():
+    """SKIlark inlines its words, where the reference runs them by name."""
+    with pytest.raises(ValueError, match="recursive definition.*a -> b -> a"):
+        expand(parse("[a] first"), dict(DEFINITIONS, a="b", b="[a] i"))
+    with pytest.raises(ValueError, match="recursive definition.*ack -> ack"):
+        expand(parse("1 ack"), dict(DEFINITIONS, ack="[dup] [ack] ifte"))
+
+
+def test_integers_read_as_strtoll_base_0_reads_them():
+    """scan.c: 0x10 is 16, 017 is 15, and 09 is 0 and then 9."""
+    assert parse("0x10 017 -017 09 0 10") == [16, 15, -15, 0, 9, 0, 10]
+
+
+def test_a_literal_past_the_unary_bound_is_refused():
+    assert parse(f"{joy.MAX_LITERAL} -{joy.MAX_LITERAL}") == [joy.MAX_LITERAL, -joy.MAX_LITERAL]
+    for t in (f"{joy.MAX_LITERAL + 1}", f"[-{joy.MAX_LITERAL + 1}]", "123456789"):
+        with pytest.raises(ValueError, match="past SKIlark's unary numerals"):
+            parse(t)
+
+
+def test_the_largest_literal_runs():
+    run = interpreted({"p": f"{joy.MAX_LITERAL} [{joy.MAX_LITERAL}] first ="})
+    assert run.run("up")[0] == ("RVal", [True])
+
+
+def test_an_undefined_word_in_a_quotation_is_a_symbol():
+    """The reference reads it as a symbol with no body, which runs as
+    nothing (undeferror 0)."""
+    assert expand(parse("[frob]"), DEFINITIONS) == [[Def("frob", [], True)]]
 
 
 def test_a_kept_name_survives_as_itself():

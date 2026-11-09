@@ -53,6 +53,19 @@ class Def:
     def __repr__(self) -> str:
         return f"Def({self.name!r})"
 
+
+def epoch_name(name: str, epoch: int) -> str:
+    """A file's word in an epoch (``joyfile._terms``): ``test`` in epoch 1
+    is ``test#1``.  No word the reference reads holds ``#``, which begins a
+    comment there (scan.c), so an epoch's name meets no word of a file's."""
+    return f"{name}#{epoch}"
+
+
+def plain_name(name: str) -> str:
+    """A word's name as Joy reads it, without its epoch."""
+    return re.sub(r"#\d+$", "", name)
+
+
 DIR = pathlib.Path(__file__).parent / "programs"
 
 #: Joy's kernel words and the constructor (interpreted) each compiles to
@@ -487,10 +500,13 @@ def _set_literal(members: Program) -> Tuple[str, Tuple[int, ...]]:
     return ("Z", tuple(sorted(set(codes))))
 
 
-def parse(text: str) -> Program:
+def parse(text: str, base0: bool = True) -> Program:
     """``"3 [dup +] i"`` -> ``[3, ['dup', '+'], 'i']``; a character
     ``'a`` is ``("C", 97)``, a string ``"ab"`` is ``("T", (97, 98))`` and
-    a set ``{2 1}`` is ``("Z", (1, 2))``."""
+    a set ``{2 1}`` is ``("Z", (1, 2))``.  Integers read as scan.c reads
+    them (``_integers``); without ``base0``, as stage 14's ``get`` and the
+    door's reader read them, a token of digits alone is a decimal integer
+    and any other token a word."""
     stack: List[Program] = [[]]
     opens: List[str] = []
     i = 0
@@ -538,10 +554,12 @@ def parse(text: str) -> Program:
                 j += 1
             t = text[i:j]
             i = j
-            if t.isdigit() or (t[0] == "-" and t[1:].isdigit()):
-                stack[-1].append(int(t))
-            else:
-                stack[-1].append(t)
+            for n in (_integers(t) if base0 else
+                      [int(t)] if t.isdigit() or (t[0] == "-" and t[1:].isdigit()) else [t]):
+                if isinstance(n, int) and abs(n) > MAX_LITERAL:
+                    raise ValueError(f"a literal past SKIlark's unary numerals: {t} "
+                                     f"(at most {MAX_LITERAL} either way)")
+                stack[-1].append(n)
     if opens:
         raise ValueError(f"unbalanced {opens[-1]!r}")
     return stack[0]
@@ -560,25 +578,38 @@ def parse_definitions(text: str) -> Dict[str, str]:
 
 
 def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
-           quoted: bool = False) -> Program:
+           quoted: bool = False, within: Tuple[str, ...] = ()) -> Program:
     """Inline every derived word except those in ``keep``; inside a
-    quotation (``quoted``) a derived word is a ``Def`` of its expansion."""
+    quotation (``quoted``) a derived word is a ``Def`` of its expansion,
+    and a word nothing defines is the reference's undefined symbol, a user
+    ``Def`` with no body, which runs as nothing, as under the reference's
+    ``undeferror`` 0, its default without usrlib.joy.  At
+    the top, a word nothing defines is refused.  A word whose expansion
+    reaches itself (``within`` holds the words being expanded) is refused
+    by name: SKIlark inlines its words, and the reference runs them by name."""
     keep = set(keep)
     out: Program = []
     for t in prog:
         if isinstance(t, tuple):
             out.append(t)
         elif isinstance(t, list):
-            out.append(expand(t, defs, keep, True))
+            out.append(expand(t, defs, keep, True, within))
         elif isinstance(t, str) and t in defs and t not in keep:
-            body = expand(parse(defs[t]), defs, keep)
-            if quoted:
-                out.append(Def(t, body, is_user(t, defs)))
+            if t in within:
+                cycle = " -> ".join(plain_name(w) for w in within[within.index(t):] + (t,))
+                raise ValueError(f"a recursive definition, which SKIlark cannot inline: {cycle}")
+            inner = within + (t,)
+            if not quoted:
+                out.extend(expand(parse(defs[t]), defs, keep, False, inner))
+            elif is_user(t, defs):              # its body as written, for body
+                out.append(Def(t, expand(parse(defs[t]), defs, keep, True, inner), True))
             else:
-                out.extend(body)
+                out.append(Def(t, expand(parse(defs[t]), defs, keep, False, inner), False))
         elif (isinstance(t, str) and t not in KERNEL and t not in COMPILED_ONLY
               and t not in EXT and t not in IO and t not in keep):
-            raise ValueError(f"unknown word {t!r}")
+            if not quoted:
+                raise ValueError(f"unknown word {t!r}")
+            out.append(Def(t, [], True))            # the reference's undefined symbol
         else:
             out.append(t)
     return out
@@ -629,8 +660,34 @@ def splice(prog: Program) -> Program:
 
 # ----------------------------------------------------------------- helpers
 
+def _integers(t: str) -> List[Union[int, str]]:
+    """A token as scan.c reads it: one that begins with a digit, or with
+    ``-`` and a digit, is a number by ``strtoll`` base 0 (``0x10`` is 16,
+    ``017`` is 15), and what ``strtoll`` leaves is read again as tokens
+    (``09`` is 0 and 9); any other token is a word."""
+    body = t[1:] if t[:1] == "-" else t
+    if not body[:1].isdigit():
+        return [t]
+    m = re.match(r"0[xX][0-9a-fA-F]+|0[0-7]*|[1-9][0-9]*", body)
+    if m.group(0).startswith(("0x", "0X")):
+        n = int(m.group(0), 16)
+    elif m.group(0).startswith("0"):
+        n = int(m.group(0), 8)
+    else:
+        n = int(m.group(0))
+    rest = body[m.end():]
+    return [-n if t[:1] == "-" else n] + (_integers(rest) if rest else [])
+
+
+#: the largest literal the reader takes, either way: SKIlark's integers
+#: are unary, one successor a unit, until binary numerals, and a literal
+#: nests as deep as it is large; SKIjack's probe reads no numeral deeper
+#: than 1,000, and the bound leaves room under it
+MAX_LITERAL = 900
+
+
 def nat(n: int) -> str:
-    return "Zero" if n == 0 else f"(Suc {nat(n - 1)})" if n > 1 else "(Suc Zero)"
+    return "(Suc " * n + "Zero" + ")" * n
 
 
 def integer(n: int) -> str:
@@ -702,18 +759,42 @@ def _tree(expr: str) -> list:
 
 def _app_depth(node, d: int = 0) -> int:
     """How deep the applications of ``node`` nest below depth ``d``, as
-    SKIjack counts them: ``f a b`` is ``(f a) b``, ``a`` two levels down."""
-    if isinstance(node, str):
-        return d
-    if len(node) == 1:
-        return _app_depth(node[0], d)
-    k = len(node) - 1
-    return max([_app_depth(node[0], d + k)]
-               + [_app_depth(a, d + k - i + 1) for i, a in enumerate(node[1:], 1)])
+    SKIjack counts them: ``f a b`` is ``(f a) b``, ``a`` two levels down.
+    A loop, not a recursion: a literal nests as deep as it is large."""
+    best, todo = d, [(node, d)]
+    while todo:
+        n, depth = todo.pop()
+        if isinstance(n, str) or not n:
+            best = max(best, depth)
+        elif len(n) == 1:
+            todo.append((n[0], depth))
+        else:
+            k = len(n) - 1
+            todo.append((n[0], depth + k))
+            todo.extend((a, depth + k - i + 1) for i, a in enumerate(n[1:], 1))
+    return best
 
 
 def _text(node) -> str:
-    return node if isinstance(node, str) else "(" + " ".join(map(_text, node)) + ")"
+    """A tree back as text; a loop, as ``_app_depth`` is."""
+    if isinstance(node, str):
+        return node
+    out: List[str] = []
+    todo: list = [node]
+    while todo:
+        x = todo.pop()
+        if isinstance(x, tuple):                    # a close or a space
+            out.append(x[0])
+        elif isinstance(x, str):
+            out.append(x)
+        else:
+            out.append("(")
+            todo.append((")",))
+            for i, a in enumerate(reversed(x)):
+                if i:
+                    todo.append((" ",))
+                todo.append(a)
+    return "".join(out)
 
 
 def spill(name: str, params: Sequence[str], expr: str) -> List[str]:
@@ -813,7 +894,7 @@ def datum(prog: Program, basis: bool = False) -> str:
         if basis:                       # the basis kernel has no symbols
             return datum(flatten(t.body) + list(prog[1:]), basis)
         named = "User" if t.user else "Named"
-        return f"Then (Def ({named} {name_text(t.name)} ({datum(t.body)}))) ({rest})"
+        return f"Then (Def ({named} {name_text(plain_name(t.name))} ({datum(t.body)}))) ({rest})"
     if isinstance(t, int):
         if basis and t < 0:
             raise ValueError(f"the basis kernel has no negative numbers: {t}")
@@ -1220,7 +1301,7 @@ class _Lists:
 #: a derived word's symbol: ``Z`` and its name, an operator's characters
 #: spelled out
 _MANGLE = {"!": "Bang", "+": "Plus", "-": "Minus", "*": "Star", "/": "Slash",
-           "<": "Lt", "=": "Eq", ">": "Gt"}
+           "<": "Lt", "=": "Eq", ">": "Gt", "#": "Hash", "~": "Tilde"}
 
 
 def def_symbol(name: str, user: bool = False) -> str:
@@ -1243,7 +1324,7 @@ def symbol_name(ctor: str) -> str:
                 break
         else:
             out.append(rest[0]); rest = rest[1:]
-    return "".join(out)
+    return plain_name("".join(out))
 
 
 def _compiled_kernel(n: int, truth: bool, signs: bool,
@@ -1319,7 +1400,7 @@ def _compiled_kernel(n: int, truth: bool, signs: bool,
         symtext = ""
         if lists and truth:
             symtext = "-- a symbol's name, its codes, to compare with a string\nsymText y = y |> { " + "; ".join(
-                f"{y} {_codes(lit, nm)}" for y, nm in zip(lists.syms or ["YNone"], lists.names or [""])) + " }\n"
+                f"{y} {_codes(lit, plain_name(nm))}" for y, nm in zip(lists.syms or ["YNone"], lists.names or [""])) + " }\n"
         text_block = COMPILED_TEXT.format(
             ORDLOG="; Logical b (RVal (Push (Num (boolZ b)) t))" if truth else "",
             CHRLOG="; Logical b (RVal (Push (Char (boolZ b)) t))" if truth else "",
@@ -1659,7 +1740,7 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
                     collect(t.body)
         for p in progs.values():
             collect(p)
-        user_bodies = {nm: expand(parse(defs[nm]), defs, quoted=True) for nm in sorted(users)}
+        user_bodies = {nm: expand(parse(defs.get(nm, "")), defs, quoted=True) for nm in sorted(users)}
     signs, lists, truth, text, types, sets, nots = _compile_set(
         list(progs.values()) + list(user_bodies.values()))
     if not lists:
@@ -1693,8 +1774,8 @@ NICKNAMES = {"+": "plus", "-": "minus", "*": "mul", "/": "divide", "=": "eql", "
              ">=": "geql", "<=": "leql", ">": "greater", "!=": "neql"}
 
 #: opername's names of the literal types (optable.c)
-TYPE_NAMES = {"Num": "integer type", "Quot": "list type", "Logical": "truth value type",
-              "Char": "character type", "Str": "string type", "Set": "set type"}
+TYPE_NAMES = {"Num": " integer type", "Quot": " list type", "Logical": " truth value type",
+              "Char": " character type", "Str": " string type", "Set": " set type"}
 
 
 def _compiled_names(c: "_Compiler", info: "Optional[_Lists]", named: bool, bodied: bool,
@@ -1715,7 +1796,7 @@ def _compiled_names(c: "_Compiler", info: "Optional[_Lists]", named: bool, bodie
             return c.text([ord(ch) for ch in word])
         arms = [f"{k} {v} " + ("(symName y)" if k == "Sym" else txt(TYPE_NAMES[k])) for k, v in kinds]
         out.append("nameI a = a |> { " + "; ".join(arms) + " }\n")
-        sarms = [f"{y} {txt(NICKNAMES.get(n, n) if not y.startswith('U') else n)}"
+        sarms = [f"{y} {txt(NICKNAMES.get(n, n) if not y.startswith('U') else plain_name(n))}"
                  for y, n in zip(syms, names)] or ["YNone TNil"]
         out.append("symName y = y |> { " + "; ".join(sarms) + " }\n")
         out.append("wName s = s |> { Empty RErr; Push a t (RVal (Push (Str (nameI a)) t)) }\n")

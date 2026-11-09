@@ -38,8 +38,11 @@ namespace.
   `treerec`'s and `treegenrec`'s C see a quotation, not the reference's
   own word; and after an error SKIlark runs on the stack the erring term
   began with, where the reference keeps the stack as the error left it,
-  `PLAN.md` §3, stage 14). `word` has 30 of the 31 constructors Avon's
-  cap of 32 arguments allows (`PLAN.md` §3, stage 6); the last,
+  `PLAN.md` §3, stage 14). The reference's own test suite
+  (`tests/joy/`, stage 16) runs too, with the limits it found pinned: no
+  recursive definitions, literals at most 900 either way, and three
+  `casting` pointer reinterpretations left out. `word` has 30 of the 31
+  constructors Avon's cap of 32 arguments allows (`PLAN.md` §3, stage 6); the last,
   `Ext ext`, holds the kernel's further words, `size at compare name
   body intern strtol format` and the I/O words, in a sum of their own
   (§3, stage 8).
@@ -89,6 +92,9 @@ namespace.
 - `PLAN.md` — what is built, what was measured, and what comes next.
 - `BENCHMARKS.md` — stage 6's costs and savings, step by step, in
   contractions, on Avon and in CI.
+
+The distribution is `skilark-joy`, since `skilark` on PyPI is another
+project's; it installs the package `skilark`.
 
 ```
 pip install -e ".[test]"

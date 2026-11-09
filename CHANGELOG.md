@@ -2,11 +2,41 @@
 
 ## Unreleased (0.11.0)
 
+- **The distribution is `skilark-joy`**, since `skilark` on PyPI is
+  another project's. The package it installs is still `skilark`.
+
 - **The reference's own tests** (stage 16, `tests/test_joytest2.py`):
   Wodan58/Joy's `test2/` copied whole at fe9fa0f with its licence
   (`tests/joy/`). Every file is run by the model and, on the slow job, by
   SKIlark, and every known failure is pinned with its reason
   (`PLAN.md` §3, stage 16).
+- **What the reference's tests found** (stage 16, done 2026-11-09):
+  - The reader refuses a float literal by name. It used to read `2.5` as
+    the terms `2` and `5`.
+  - An undefined word in a quotation is the reference's undefined
+    symbol, which runs as nothing. At the top of a program it is still
+    refused.
+  - Each term sees the definitions read before it, so a later `DEFINE`
+    no longer changes the terms before it, and a word defined after a
+    term is undefined there.
+  - `body` of a user definition gives its body as written.
+  - A recursive definition is refused by name, including one that names
+    itself only inside a quotation. It used to exhaust Python's
+    recursion limit.
+  - A literal past 900 either way is refused by name
+    (`joy.MAX_LITERAL`), since integers are unary.
+  - `name` of a literal has the reference's leading space (`" integer
+    type"`).
+  - Integers read as the reference reads them: `0x10` is 16 and `017`
+    is 15. A module's member (`x.5`) is refused by name.
+  - The model runs a definition that overwrites a builtin, as the
+    reference does.
+  - `casting`'s three pointer reinterpretations in `casting.joy` are left
+    out by name, as deviations.
+  - The reference binary at fe9fa0f settles `all2.joy`: its last three
+    lines are stale and print `false` there too. On the text the harness
+    runs, the binary and the model print the same lines for all 144
+    runnable files, but `getenv`'s PATH.
 
 ## 0.10.0 (2026-11-07)
 
