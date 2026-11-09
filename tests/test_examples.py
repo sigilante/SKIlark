@@ -67,6 +67,16 @@ def test_a_float_is_refused_by_name():
     assert joyfile.read('"2.5" 1e5 .') == [("term", '"2.5" 1e5')]
 
 
+def test_a_redefinition_holds_from_where_it_is_read():
+    """A later DEFINE changes the word, and the words that call it, for
+    the terms after it alone; a quoted word reads back by its own name."""
+    text = ("DEFINE a == 1 ; b == a 10 + .\nb . [a] first body .\n"
+            "DEFINE a == 2 .\nb . [a] first name . [a] first body .\n")
+    lines = ["11", "[1]", "12", '"a"', "[2]"]
+    assert joyref.Joy().run_file(text) == lines
+    assert joyfile.run_file(text) == lines
+
+
 def test_the_reference_s_scoping_is_not_skilark_s():
     with pytest.raises(joyfile.JoyFileError, match="HIDE"):
         joyfile.read("HIDE x == 1 IN y == x END .")
