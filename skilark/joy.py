@@ -574,7 +574,10 @@ def parse_definitions(text: str) -> Dict[str, str]:
 def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
            quoted: bool = False) -> Program:
     """Inline every derived word except those in ``keep``; inside a
-    quotation (``quoted``) a derived word is a ``Def`` of its expansion."""
+    quotation (``quoted``) a derived word is a ``Def`` of its expansion,
+    and a word nothing defines is the reference's undefined symbol, a user
+    ``Def`` with no body, which runs as nothing (``undeferror`` 0).  At
+    the top, a word nothing defines is refused."""
     keep = set(keep)
     out: Program = []
     for t in prog:
@@ -590,7 +593,9 @@ def expand(prog: Program, defs: Dict[str, str], keep: Iterable[str] = (),
                 out.extend(body)
         elif (isinstance(t, str) and t not in KERNEL and t not in COMPILED_ONLY
               and t not in EXT and t not in IO and t not in keep):
-            raise ValueError(f"unknown word {t!r}")
+            if not quoted:
+                raise ValueError(f"unknown word {t!r}")
+            out.append(Def(t, [], True))            # the reference's undefined symbol
         else:
             out.append(t)
     return out
@@ -1671,7 +1676,7 @@ def compiled(programs: Dict[str, str], defs: Dict[str, str] = DEFINITIONS
                     collect(t.body)
         for p in progs.values():
             collect(p)
-        user_bodies = {nm: expand(parse(defs[nm]), defs, quoted=True) for nm in sorted(users)}
+        user_bodies = {nm: expand(parse(defs.get(nm, "")), defs, quoted=True) for nm in sorted(users)}
     signs, lists, truth, text, types, sets, nots = _compile_set(
         list(progs.values()) + list(user_bodies.values()))
     if not lists:

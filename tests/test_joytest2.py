@@ -91,12 +91,7 @@ SKILARK = dict(MODEL, **{
     "condlinrec.joy": "a recursive DEFINE (ack): the expander does not terminate",
     "condnestrec.joy": "3 4 cnr-ack in unary numerals runs out of fuel",
     **{f: "123456789: a unary literal past Python's recursion limit"
-       for f in ("equal.joy",)},
-    **{f: "an undefined word in a quotation is refused, not read as a symbol"
-       for f in ("case.joy", "compare.joy", "ifstring.joy", "include.joy",
-                 "neql.joy", "sametype.joy", "undefs.joy")},
-    **{f: "an undefined word in a quotation, and 123456789 unary"
-       for f in ("eql.joy", "geql.joy", "greater.joy", "leql.joy", "less.joy")},
+       for f in ("equal.joy", "eql.joy", "geql.joy", "greater.joy", "leql.joy", "less.joy")},
 })
 
 STRING = r'"(?:\\.|[^"\\])*"'

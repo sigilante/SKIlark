@@ -8,7 +8,7 @@ set compiles with integers and truth values; all measured on skijack
 import pytest
 
 from skilark import compiled, interpreted, joy
-from skilark.joy import DEFINITIONS, expand, parse, words
+from skilark.joy import DEFINITIONS, Def, expand, parse, words
 
 PROGRAMS = {
     "p1": "1 2 + dup +",
@@ -68,6 +68,12 @@ def test_derived_words_inline_to_the_kernel():
         [[1], ["dup", "cons"], "swap", "cat", "dup", "cons", "i"]
     with pytest.raises(ValueError, match="unknown word"):
         expand(parse("1 frob"), DEFINITIONS)
+
+
+def test_an_undefined_word_in_a_quotation_is_a_symbol():
+    """The reference reads it as a symbol with no body, which runs as
+    nothing (undeferror 0)."""
+    assert expand(parse("[frob]"), DEFINITIONS) == [[Def("frob", [], True)]]
 
 
 def test_a_kept_name_survives_as_itself():

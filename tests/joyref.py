@@ -360,8 +360,10 @@ class Joy:
             self.b[name](s)
         elif name in self.defs:
             self.exe(s, [literal(t) for t in self.defs[name]])
-        else:
+        elif name in REFERENCE_WORDS:
             raise KeyError(f"no definition of {name!r}")
+        # else the reference's undefined symbol, which runs as nothing
+        # (interp.c, undeferror 0)
 
     def quote(self, v: Value) -> tuple:
         return v[1]
@@ -1455,6 +1457,33 @@ class Joy:
 
 
 #: the builtins whose names are not Python identifiers
+#: the reference's builtins (table.c at fe9fa0f): one the model lacks is
+#: the model's gap, and raises, where any other undefined word runs as the
+#: reference's undefined symbol
+REFERENCE_WORDS = frozenset("""
+false true maxint setsize stack __symtabmax __symtabindex __dump conts
+autoput undeferror undefs echo clock time rand __memorymax stdin stdout
+stderr id dup swap rollup rolldown rotate popd dupd swapd rollupd rolldownd
+rotated pop choice or xor and not +\0plus -\0minus *\0mul /\0divide rem div
+sign neg ord chr abs acos asin atan atan2 ceil cos cosh exp floor frexp
+ldexp log log10 modf pow sin sinh sqrt tan tanh trunc localtime gmtime
+mktime strftime strtol strtod format formatf srand pred succ max min fclose
+feof ferror fflush fgetch fgets fopen fread fwrite fremove frename fput
+fputch fputchars fputstring fseek ftell unstack cons swons first rest
+compare at of size opcase case uncons unswons drop take concat enconcat name
+intern body null small >=\0geql >\0greater <=\0leql <\0less !=\0neql =\0eql
+equal has in integer char logical set string list leaf user float file i x
+dip app1 app11 app12 construct nullary unary unary2 unary3 unary4 app2 app3
+app4 binary ternary cleave branch ifte ifinteger ifchar iflogical ifset
+ifstring iflist iffloat iffile cond while linrec tailrec binrec genrec
+condnestrec condlinrec step fold map times infra primrec filter split some
+all treestep treerec treegenrec help _help helpdetail manual __html_manual
+__latex_manual __manual_list __settracegc setautoput setundeferror setecho
+gc system getenv argv argc __memoryindex get put putch putchars include
+abort quit assign casting filetime finclude over pick round sametype typeof
+unassign #genrecaux #treegenrecaux #treerecaux
+""".split())
+
 BUILTIN_NAMES = {
     "plus": "+", "minus": "-", "mul": "*", "divide": "/", "eql": "=",
     "neql": "!=", "less": "<", "leql": "<=", "greater": ">", "geql": ">=",
