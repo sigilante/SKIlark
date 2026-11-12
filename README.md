@@ -2,6 +2,8 @@
 
 ![](./img/hero.jpeg)
 
+Built by N. E. Davis under the auspices of [ZeroAttest Research](https://zeroattest.com).
+
 Joy on SKIjack. A concatenative language in the line of Joy (von Thun) and
 Kerby's *Theory of Concatenative Combinators*, written as
 [SKIjack](https://github.com/sigilante/SKIjack) programs: its words are
