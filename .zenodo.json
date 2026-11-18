@@ -1,0 +1,14 @@
+{
+  "title": "SKIlark: Joy on SKIjack",
+  "upload_type": "software",
+  "description": "SKIlark is a concatenative language in the line of Joy (von Thun), written as SKIjack programs. Its words are closed SKI supercombinators, its programs are Scott lists of words, and its dictionary is the program's own namespace. It implements Joy in full in sixteen stages, checked against a model of the reference implementation and against the reference's own test suite, with every deviation pinned and explained. Distributed on PyPI as skilark-joy.",
+  "creators": [
+    {
+      "name": "Davis, N. E.",
+      "affiliation": "ZeroAttest",
+      "orcid": "0000-0002-1131-8319"
+    }
+  ],
+  "license": "MIT",
+  "keywords": ["concatenative programming", "Joy", "combinatory logic", "SKI", "supercombinators", "SKIjack"]
+}

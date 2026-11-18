@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.1 (2026-11-18)
+
+Archived on Zenodo; no change to the code.
+
+- `.zenodo.json` gives the archive's title, creator, licence and keywords.
+
 ## 0.11.0 (2026-11-09)
 
 The first release on PyPI, as `skilark-joy`.
