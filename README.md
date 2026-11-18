@@ -2,6 +2,8 @@
 
 ![](./img/hero.jpeg)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24331802.svg)](https://doi.org/10.5281/zenodo.24331802)
+
 Built by N. E. Davis under the auspices of [ZeroAttest Research](https://zeroattest.com).
 
 Joy on SKIjack. A concatenative language in the line of Joy (von Thun) and
