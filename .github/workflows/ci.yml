@@ -1,6 +1,7 @@
 name: CI
 
-# A change only to prose skips CI.
+# A change only to prose or to archive metadata (.zenodo.json, CITATION.cff)
+# skips CI.
 on:
   push:
     branches: [master]
@@ -8,6 +9,8 @@ on:
       - "**/*.md"
       - "img/**"
       - "LICENSE"
+      - ".zenodo.json"
+      - "CITATION.cff"
   pull_request:
     # labeled: adding the `reference` label runs the reference job
     types: [opened, synchronize, reopened, labeled]
@@ -15,6 +18,8 @@ on:
       - "**/*.md"
       - "img/**"
       - "LICENSE"
+      - ".zenodo.json"
+      - "CITATION.cff"
 
 # A newer run of a pull request (a push, or a label added) cancels the one
 # before it; runs on master each finish.
